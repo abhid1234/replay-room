@@ -1,6 +1,6 @@
 {
   "name": "@avee1234/replay-room",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Guarded webhook rehearsal, replay evidence, and incident operations for Render.",
   "keywords": [

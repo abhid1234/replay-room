@@ -9,6 +9,7 @@ const temporaryDirectory = mkdtempSync(join(tmpdir(), "replay-room-package-"));
 const environment = { ...process.env, npm_config_cache: join(tmpdir(), "replay-room-npm-cache") };
 
 try {
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   const output = execFileSync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryDirectory], {
     encoding: "utf8",
     env: environment,
@@ -27,7 +28,7 @@ try {
   ];
 
   assert.equal(pack.name, "@avee1234/replay-room");
-  assert.equal(pack.version, "0.1.0");
+  assert.equal(pack.version, packageJson.version);
   for (const path of required) assert.ok(files.has(path), `package is missing ${path}`);
   for (const path of files) {
     assert.ok(!path.startsWith("tests/"), `package leaked test file ${path}`);

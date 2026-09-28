@@ -1,7 +1,7 @@
 # Replay Room
 
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0)
+[![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
 **Rehearse a failed webhook before you replay it.**
 
@@ -52,7 +52,7 @@ npx @avee1234/replay-room inspect ./incident.evidence.json
 EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npx @avee1234/replay-room verify ./incident.evidence.json
 ```
 
-The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. The exact v0.1.0 tarball is already available from the [GitHub release](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) with a CycloneDX SBOM and signed SLSA and SBOM attestations. npm publication remains human-gated; this repository does not claim that the package is already in the registry.
+The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. Exact tarballs are available from [GitHub Releases](https://github.com/abhid1234/replay-room/releases) with CycloneDX SBOMs and signed SLSA and SBOM attestations. npm publication remains human-gated; this repository does not claim that the package is already in the registry.
 
 The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
 
@@ -176,7 +176,7 @@ After a Render Blueprint is live, one command produces machine-readable deployme
 npm run smoke:live -- --api https://YOUR-API.onrender.com --site https://YOUR-CONSOLE.onrender.com
 ```
 
-GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. The [v0.1.0 release](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) was built from commit `7049351`, and both attestations verify against its published tarball digest.
+GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
 
 ## Interview walkthrough
 
@@ -191,7 +191,7 @@ GitHub Actions runs the same gate on every branch push and pull request, exercis
 
 ## Status
 
-Version `0.1.0` is a public, attested GitHub release and a production-shaped first version. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
+Version `0.1.1` is the current production-shaped release line. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
 
 ## License
 

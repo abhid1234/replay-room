@@ -2,6 +2,20 @@
 
 All notable changes to Replay Room are documented here.
 
+## 0.1.1 - 2026-09-27
+
+### Added
+
+- cold-start-aware live deployment acceptance CLI and manual GitHub smoke workflow;
+- machine-readable checks for dependency health, OpenAPI surface, console shell, and CORS wiring;
+- deterministic Hugging Face dataset bundle with incident and replay-guard configurations;
+- fixture safety gates, byte counts, SHA-256 manifests, and upload/readback documentation.
+
+### Changed
+
+- package verification now follows the version declared in `package.json` to prevent release-check drift;
+- the full quality gate verifies live-smoke behavior and generated fixture freshness.
+
 ## 0.1.0 - 2026-09-27
 
 ### Added

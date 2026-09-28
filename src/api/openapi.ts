@@ -10,7 +10,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Replay Room API",
-    version: "0.1.0",
+    version: "0.1.1",
     summary: "Capture, diagnose, rehearse, and safely replay webhook incidents.",
     description: "Public ingest is separated from bearer-protected operator endpoints. Replays require passing rehearsal evidence bound to the exact payload digest and destination, plus explicit acknowledgement when receiver acceptance is ambiguous.",
     license: { name: "MIT", identifier: "MIT" },
