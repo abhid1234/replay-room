@@ -12,6 +12,7 @@ const schema = z.object({
   WEB_ORIGIN: z.string().default("http://localhost:5173"),
   ALLOW_PRIVATE_TARGETS: z.string().default("false").transform((value) => value === "true"),
   MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(262_144),
+  INGEST_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().max(100_000).default(600),
   RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === "production" && value.EVIDENCE_SIGNING_SECRET === DEVELOPMENT_EVIDENCE_SECRET) {

@@ -9,6 +9,7 @@ class FakeQueue implements DeliveryQueue {
   async enqueue(job: DeliveryJob, options: { delayMs?: number } = {}) { this.jobs.push({ job, delayMs: options.delayMs ?? 0 }); }
   async health() { return { latencyMs: 0, jobs: { waiting: 0, active: 0, delayed: 0, failed: 0 }, workerHeartbeat: null, cronHeartbeat: null }; }
   async heartbeat() {}
+  async consumeRateLimit(_key: string, limit: number, windowSeconds: number) { return { allowed: true, remaining: limit - 1, retryAfterSeconds: windowSeconds }; }
   async close() {}
 }
 

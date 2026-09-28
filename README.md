@@ -41,6 +41,8 @@ The command prints machine-readable JSON and exits non-zero for a modified or ma
 
 The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
 
+Public ingest is protected by an atomic per-endpoint limit in Render Key Value. The default allows 600 requests per minute, works across horizontally scaled API instances, and returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers. Redis stores only a short hash of the ingest key, not the key itself.
+
 ## Render architecture
 
 ```mermaid
@@ -138,6 +140,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Sensitive request headers are redacted before storage.
 - Endpoint signing secrets remain server-side and are redacted from every API response and evidence export.
 - Payloads are capped at 256 KiB by default.
+- Per-endpoint ingest limits reject overload before database or queue writes.
 - Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
 - Private, loopback, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.

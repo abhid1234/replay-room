@@ -193,6 +193,18 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const endpoint = await store.getEndpointByIngestKey(ingestKey);
     if (!endpoint) return reply.code(404).send({ error: "Unknown ingest endpoint" });
 
+    const rateLimit = await queue.consumeRateLimit(
+      sha256(ingestKey).slice(0, 24),
+      config.INGEST_RATE_LIMIT_PER_MINUTE,
+      60,
+    );
+    reply.header("x-ratelimit-limit", config.INGEST_RATE_LIMIT_PER_MINUTE);
+    reply.header("x-ratelimit-remaining", rateLimit.remaining);
+    if (!rateLimit.allowed) {
+      reply.header("retry-after", rateLimit.retryAfterSeconds);
+      return reply.code(429).send({ error: "Ingest rate limit exceeded", retryAfterSeconds: rateLimit.retryAfterSeconds });
+    }
+
     const rawPayload = (request as typeof request & { rawBody?: string }).rawBody ?? JSON.stringify(request.body ?? null);
     if (endpoint.signingSecret) {
       const signature = String(request.headers["x-replay-signature"] ?? "");

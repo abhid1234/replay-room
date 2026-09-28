@@ -24,6 +24,12 @@ Retryable outcomes:
 
 Other HTTP 4xx responses are treated as permanent failures and dead-lettered immediately. Retry delays use bounded exponential backoff with jitter.
 
+## Ingest admission control
+
+After resolving a valid endpoint but before signature verification or database writes, the API consumes a fixed-window counter in Key Value. A Lua script performs `INCR`, first-write expiry, and TTL read atomically, so multiple Render web-service instances share one limit. Counter keys contain a truncated SHA-256 digest of the ingest key.
+
+The default window is 600 requests per minute per endpoint and is configurable with `INGEST_RATE_LIMIT_PER_MINUTE`. Rejected requests return HTTP 429 plus remaining-budget and retry timing headers; they never enter Postgres or BullMQ.
+
 ## Rehearsal contract
 
 A rehearsal sends the original payload with `x-replay-room-mode: rehearsal` to an operator-selected endpoint. The evidence record binds:

@@ -58,7 +58,14 @@ export interface DeliveryQueue {
   enqueue(job: DeliveryJob, options?: { delayMs?: number; jobId?: string }): Promise<void>;
   health(): Promise<QueueHealth>;
   heartbeat(component: "worker" | "cron"): Promise<void>;
+  consumeRateLimit(key: string, limit: number, windowSeconds: number): Promise<RateLimitDecision>;
   close(): Promise<void>;
+}
+
+export interface RateLimitDecision {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSeconds: number;
 }
 
 export interface QueueHealth {

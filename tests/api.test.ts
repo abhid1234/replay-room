@@ -6,6 +6,7 @@ import { FakeStore } from "./fake-store.js";
 
 class FakeQueue implements DeliveryQueue {
   jobs: Array<{ job: DeliveryJob; options?: { delayMs?: number; jobId?: string } }> = [];
+  rateLimits = new Map<string, number>();
 
   async enqueue(job: DeliveryJob, options?: { delayMs?: number; jobId?: string }) {
     this.jobs.push({ job, ...(options ? { options } : {}) });
@@ -22,6 +23,12 @@ class FakeQueue implements DeliveryQueue {
 
   async heartbeat() {}
 
+  async consumeRateLimit(key: string, limit: number, windowSeconds: number) {
+    const count = (this.rateLimits.get(key) ?? 0) + 1;
+    this.rateLimits.set(key, count);
+    return { allowed: count <= limit, remaining: Math.max(0, limit - count), retryAfterSeconds: windowSeconds };
+  }
+
   async close() {}
 }
 
@@ -35,6 +42,7 @@ const config: AppConfig = {
   WEB_ORIGIN: "http://localhost:5173",
   ALLOW_PRIVATE_TARGETS: true,
   MAX_PAYLOAD_BYTES: 262_144,
+  INGEST_RATE_LIMIT_PER_MINUTE: 2,
   RETENTION_DAYS: 30,
 };
 
@@ -58,9 +66,13 @@ describe("webhook API", () => {
     };
     const first = await app.inject(request);
     const second = await app.inject(request);
+    const throttled = await app.inject(request);
 
     expect(first.statusCode).toBe(202);
     expect(second.statusCode).toBe(200);
+    expect(throttled.statusCode).toBe(429);
+    expect(throttled.headers["retry-after"]).toBe("60");
+    expect(first.headers["x-ratelimit-remaining"]).toBe("1");
     expect(first.json()).toMatchObject({ accepted: true, duplicate: false, status: "queued" });
     expect(second.json()).toMatchObject({ accepted: true, duplicate: true });
     expect(store.events).toHaveLength(1);
