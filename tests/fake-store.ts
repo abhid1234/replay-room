@@ -61,6 +61,6 @@ export class FakeStore implements Store {
   async latestPassingRehearsal(eventId: string) { return [...this.rehearsals].reverse().find((item) => item.eventId === eventId && item.passed) ?? null; }
   async addAudit(input: Omit<AuditEntry, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.audit.push(row); return row; }
   async stats(): Promise<DashboardStats> { const all = [...this.events.values()]; const delivered = all.filter((e) => e.status === "delivered").length; return { total: all.length, queued: all.filter((e) => e.status === "queued").length, delivered, retrying: all.filter((e) => e.status === "retrying").length, deadLetter: all.filter((e) => e.status === "dead_letter").length, deliveryRate: all.length ? delivered / all.length * 100 : 100 }; }
-  async recoverPending() { return []; }
-  async deleteOlderThan() { return 0; }
+  async recoverPending(_beforeIso: string): Promise<string[]> { return []; }
+  async deleteOlderThan(_beforeIso: string): Promise<number> { return 0; }
 }

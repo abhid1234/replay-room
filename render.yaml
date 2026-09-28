@@ -5,13 +5,13 @@ previews:
 services:
   - type: web
     name: replay-room-api
+    plan: free
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: node dist/api/server.js
     healthCheckPath: /health
     autoDeployTrigger: checksPass
-    preDeployCommand: node dist/db/migrate.js
     envVars: &app-env
       - key: DATABASE_URL
         fromDatabase:
@@ -36,24 +36,10 @@ services:
         value: "600"
       - key: RETENTION_DAYS
         value: "30"
-
-  - type: worker
-    name: replay-room-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/worker.js
-    autoDeployTrigger: checksPass
-    envVars: *app-env
-
-  - type: cron
-    name: replay-room-reconciler
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/cron.js
-    schedule: "*/10 * * * *"
-    envVars: *app-env
+      - key: EMBEDDED_WORKER
+        value: "true"
+      - key: RECONCILE_INTERVAL_SECONDS
+        value: "600"
 
   - type: web
     name: replay-room-web

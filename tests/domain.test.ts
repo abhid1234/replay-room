@@ -11,12 +11,12 @@ import type { Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
 const event: WebhookEvent = {
   id: "3a553dce-f3c5-4da7-a612-857389682d06", endpointId: "6d1bda7a-8615-4c03-8095-3600e826f0f7",
-  idempotencyKey: "checkout-1", headers: {}, payload: { ok: true }, payloadSha256: "abc", status: "dead_letter",
+  idempotencyKey: "checkout-1", headers: {}, payload: { ok: true }, payloadSha256: "a".repeat(64), status: "dead_letter",
   attemptCount: 5, lastError: "timeout", receivedAt: "2026-09-27T00:00:00.000Z", updatedAt: "2026-09-27T00:01:00.000Z",
 };
 
 const rehearsal: Rehearsal = {
-  id: "aeb0eb77-bb9e-4ec8-aecd-51c074a1ee6d", eventId: event.id, payloadSha256: "abc",
+  id: "aeb0eb77-bb9e-4ec8-aecd-51c074a1ee6d", eventId: event.id, payloadSha256: event.payloadSha256,
   destinationUrl: "https://example.com/hook", passed: true, statusCode: 204, notes: "ok", createdAt: "2026-09-27T00:02:00.000Z",
 };
 

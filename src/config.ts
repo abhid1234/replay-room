@@ -14,6 +14,8 @@ const schema = z.object({
   MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(262_144),
   INGEST_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().max(100_000).default(600),
   RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  EMBEDDED_WORKER: z.string().default("false").transform((value) => value === "true"),
+  RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(600),
 }).superRefine((value, context) => {
   if (value.NODE_ENV === "production" && value.EVIDENCE_SIGNING_SECRET === DEVELOPMENT_EVIDENCE_SECRET) {
     context.addIssue({

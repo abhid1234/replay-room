@@ -1,9 +1,51 @@
 {
-  "name": "replay-room",
+  "name": "@avee1234/replay-room",
   "version": "0.1.0",
-  "private": true,
-  "description": "A guarded webhook rehearsal and replay console built for Render.",
+  "private": false,
+  "description": "Guarded webhook rehearsal, replay evidence, and incident operations for Render.",
+  "keywords": [
+    "webhooks",
+    "dead-letter-queue",
+    "incident-response",
+    "render",
+    "replay",
+    "observability"
+  ],
+  "homepage": "https://github.com/abhid1234/replay-room#readme",
+  "bugs": {
+    "url": "https://github.com/abhid1234/replay-room/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhid1234/replay-room.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "replay-room": "./dist/cli/verify-evidence.js"
+  },
+  "files": [
+    "dist/",
+    "docs/",
+    "fixtures/",
+    "schema/",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -20,11 +62,16 @@
     "start:cron": "node dist/cron.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "evidence:verify": "tsx src/cli/verify-evidence.ts",
+    "evidence:verify": "tsx src/cli/verify-evidence.ts verify",
+    "evidence:inspect": "tsx src/cli/verify-evidence.ts inspect",
     "test": "vitest run",
+    "test:integration": "INTEGRATION_TESTS=true vitest run tests/integration.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm test && npm run build"
+    "conformance": "node scripts/check-conformance.mjs",
+    "test:package": "node --test scripts/check-registry-version.node-test.mjs && node scripts/check-package.mjs",
+    "verify": "npm run typecheck && npm test && npm run build && npm run conformance && npm run test:package",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",

@@ -1,0 +1,58 @@
+# Deploying Replay Room on Render
+
+Replay Room has two intentional operating profiles: a zero-dollar evaluation lab and a separated production topology. The root `render.yaml` is the lab profile.
+
+## Free lab profile
+
+The Blueprint creates:
+
+- one free Docker web service for the Fastify API, BullMQ consumer, and reconciliation loop;
+- one free static site for the operator console;
+- one free Render Postgres database;
+- one free Render Key Value instance.
+
+The web process runs database migrations on startup. `EMBEDDED_WORKER=true` starts the queue consumer and runs reconciliation at `RECONCILE_INTERVAL_SECONDS`. The default interval is ten minutes and values below one minute are rejected.
+
+## Current free-tier constraints
+
+Render's free resources are suitable for evaluation, not production:
+
+- a free web service spins down after 15 minutes without inbound traffic;
+- a cold start can take about one minute;
+- free Postgres is limited to one database per workspace, 1 GB, and expires after 30 days;
+- free Postgres has no backups or managed connection pooling;
+- free Key Value is limited to one instance per workspace and loses data on restart;
+- a free web service has an ephemeral filesystem and no shell access;
+- monthly instance-hour, bandwidth, and build-minute limits still apply.
+
+The durable source of truth is Postgres. Losing the free Key Value instance can strand queued events, so the embedded reconciler scans the ledger and re-enqueues old queued, retrying, or interrupted deliveries. That makes the platform limitation a tested recovery story instead of a hidden assumption.
+
+## Blueprint activation
+
+1. Sign in to Render with the GitHub account that can access `abhid1234/replay-room`.
+2. Create a new Blueprint and select the repository and `render.yaml`.
+3. Confirm every compute selector says **Free** before applying it.
+4. Set `WEB_ORIGIN` to the final static-site origin.
+5. Set `VITE_API_BASE` to the final API origin.
+6. Apply the Blueprint and wait for Postgres, Key Value, API, and static site to become healthy.
+7. Open `/health`, then the dashboard's live fabric panel.
+
+The Blueprint generates `ADMIN_TOKEN` and `EVIDENCE_SIGNING_SECRET`. Do not copy either value into Git, logs, fixtures, or screenshots.
+
+## Production upgrade
+
+For continuous delivery processing, move the queue consumer and reconciler out of the web service:
+
+- API: `node dist/api/server.js` with `EMBEDDED_WORKER=false`;
+- background worker: `node dist/worker.js`;
+- cron job: `node dist/cron.js` every ten minutes;
+- paid Postgres with backups and an explicit retention policy;
+- persistent paid Key Value;
+- organization-scoped authentication and secret management;
+- egress enforcement or DNS pinning to close the lookup-to-connect rebinding window.
+
+This split is deliberately not the default Blueprint because Render background workers and cron jobs do not have a free compute plan.
+
+## Post-deploy evidence
+
+Record the deployed commit, service URLs, `/health` response, live fabric screenshot, one synthetic outage drill, one exported evidence bundle, and the CLI verification result. Never use customer payloads in public proof.

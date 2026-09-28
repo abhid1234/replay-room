@@ -1,0 +1,35 @@
+{
+  "name": "Replay Room incident fixtures",
+  "version": "0.1.0",
+  "license": "MIT",
+  "synthetic": true,
+  "description": "Deterministic webhook incident scenarios for conformance and demonstrations. No production traffic or provider claims.",
+  "cases": [
+    {
+      "id": "payment-receiver-outage",
+      "file": "incidents/payment-receiver-outage.json",
+      "expectedDiagnosis": "receiver_outage"
+    },
+    {
+      "id": "provider-rate-limit",
+      "file": "incidents/provider-rate-limit.json",
+      "expectedDiagnosis": "rate_limited"
+    },
+    {
+      "id": "contract-rejection",
+      "file": "incidents/contract-rejection.json",
+      "expectedDiagnosis": "contract_rejection"
+    },
+    {
+      "id": "network-failure",
+      "file": "incidents/network-failure.json",
+      "expectedDiagnosis": "network_failure"
+    },
+    {
+      "id": "automatic-recovery",
+      "file": "incidents/automatic-recovery.json",
+      "expectedDiagnosis": "transient"
+    }
+  ],
+  "replayGuardFile": "replay-guard/cases.json"
+}

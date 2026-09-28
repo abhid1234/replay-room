@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-09-27T15:10:00.000Z",
+  "event": {
+    "id": "4a2df8d4-5f97-48db-9995-9eae6890c21f",
+    "endpointId": "4a4df58d-2a59-4088-bfb2-e53ec08fb36d",
+    "idempotencyKey": "shipment-network-9",
+    "headers": { "content-type": "application/json" },
+    "payload": { "type": "shipment.created", "shipmentId": "ship_fixture_9" },
+    "payloadSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "status": "dead_letter",
+    "attemptCount": 2,
+    "lastError": "getaddrinfo ENOTFOUND receiver.example",
+    "receivedAt": "2026-09-27T15:00:00.000Z",
+    "updatedAt": "2026-09-27T15:04:00.000Z",
+    "endpoint": {
+      "id": "4a4df58d-2a59-4088-bfb2-e53ec08fb36d",
+      "name": "Synthetic shipping receiver",
+      "ingestKey": "fixture_network_key",
+      "destinationUrl": "https://receiver.example/webhooks/shipments",
+      "signingSecret": null,
+      "maxAttempts": 2,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "3b667eef-8da3-4a7b-914a-9599b75bd10f",
+        "eventId": "4a2df8d4-5f97-48db-9995-9eae6890c21f",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/shipments",
+        "statusCode": null,
+        "responseBody": null,
+        "error": "getaddrinfo ENOTFOUND receiver.example",
+        "durationMs": 10003,
+        "createdAt": "2026-09-27T15:00:10.000Z"
+      },
+      {
+        "id": "a72d7029-02ad-421e-886d-3e2bef14a142",
+        "eventId": "4a2df8d4-5f97-48db-9995-9eae6890c21f",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/shipments",
+        "statusCode": null,
+        "responseBody": null,
+        "error": "getaddrinfo ENOTFOUND receiver.example",
+        "durationMs": 10001,
+        "createdAt": "2026-09-27T15:04:00.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": []
+  }
+}

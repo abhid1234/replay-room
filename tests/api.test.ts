@@ -44,6 +44,8 @@ const config: AppConfig = {
   MAX_PAYLOAD_BYTES: 262_144,
   INGEST_RATE_LIMIT_PER_MINUTE: 2,
   RETENTION_DAYS: 30,
+  EMBEDDED_WORKER: false,
+  RECONCILE_INTERVAL_SECONDS: 600,
 };
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = [];

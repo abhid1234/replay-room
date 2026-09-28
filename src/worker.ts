@@ -5,19 +5,33 @@ import { loadConfig } from "./config.js";
 import { PostgresStore } from "./db/postgres-store.js";
 import { migrate } from "./db/migrate.js";
 import { deliver } from "./delivery.js";
-import type { DeliveryJob } from "./domain/contracts.js";
+import type { DeliveryJob, DeliveryQueue, Store } from "./domain/contracts.js";
 import { DELIVERY_QUEUE, RedisDeliveryQueue } from "./queue.js";
 
-export async function startWorker(): Promise<void> {
-  const config = loadConfig();
-  await migrate(config.DATABASE_URL);
-  const store = new PostgresStore(config.DATABASE_URL);
-  const queue = new RedisDeliveryQueue(config.REDIS_URL);
-  const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+interface DeliveryWorkerOptions {
+  redisUrl: string;
+  store: Store;
+  queue: DeliveryQueue;
+  allowPrivateTargets: boolean;
+  concurrency?: number;
+}
+
+export interface DeliveryWorkerHandle {
+  close(): Promise<void>;
+}
+
+export function createDeliveryWorker({
+  redisUrl,
+  store,
+  queue,
+  allowPrivateTargets,
+  concurrency = 10,
+}: DeliveryWorkerOptions): DeliveryWorkerHandle {
+  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
   const worker = new Worker<DeliveryJob>(
     DELIVERY_QUEUE,
-    async (job) => deliver(job.data, { store, queue, allowPrivateTargets: config.ALLOW_PRIVATE_TARGETS }),
-    { connection, concurrency: 10, lockDuration: 30_000 },
+    async (job) => deliver(job.data, { store, queue, allowPrivateTargets }),
+    { connection, concurrency, lockDuration: 30_000 },
   );
 
   worker.on("completed", (job, result) => console.log(JSON.stringify({ event: "job.completed", jobId: job.id, result })));
@@ -30,20 +44,39 @@ export async function startWorker(): Promise<void> {
       console.error(JSON.stringify({ event: "worker.heartbeat_failed", error: error instanceof Error ? error.message : "Unknown error" }));
     }
   };
-  await publishHeartbeat();
+  void publishHeartbeat();
   const heartbeatTimer = setInterval(() => void publishHeartbeat(), 15_000);
   heartbeatTimer.unref();
 
+  console.log(JSON.stringify({ event: "worker.ready", queue: DELIVERY_QUEUE, concurrency }));
+  return {
+    async close() {
+      clearInterval(heartbeatTimer);
+      await worker.close();
+      await connection.quit();
+    },
+  };
+}
+
+export async function startWorker(): Promise<void> {
+  const config = loadConfig();
+  await migrate(config.DATABASE_URL);
+  const store = new PostgresStore(config.DATABASE_URL);
+  const queue = new RedisDeliveryQueue(config.REDIS_URL);
+  const worker = createDeliveryWorker({
+    redisUrl: config.REDIS_URL,
+    store,
+    queue,
+    allowPrivateTargets: config.ALLOW_PRIVATE_TARGETS,
+  });
+
   const close = async () => {
-    clearInterval(heartbeatTimer);
     await worker.close();
     await queue.close();
-    await connection.quit();
     await store.close();
   };
   process.once("SIGTERM", () => void close());
   process.once("SIGINT", () => void close());
-  console.log(JSON.stringify({ event: "worker.ready", queue: DELIVERY_QUEUE, concurrency: 10 }));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

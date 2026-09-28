@@ -41,36 +41,43 @@ EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npm run evidence:verify -- ./
 
 The command prints machine-readable JSON and exits non-zero for a modified or malformed bundle.
 
+The same validator is available as the publish-ready `@avee1234/replay-room` package:
+
+```bash
+npx @avee1234/replay-room inspect ./incident.evidence.json
+EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npx @avee1234/replay-room verify ./incident.evidence.json
+```
+
+The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident fixtures, and the CLI. Publication remains human-gated; this repository does not claim that the package is already on npm.
+
 The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
 
 Public ingest is protected by an atomic per-endpoint limit in Render Key Value. The default allows 600 requests per minute, works across horizontally scaled API instances, and returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers. Redis stores only a short hash of the ingest key, not the key itself.
 
 ## Render architecture
 
+The default Blueprint is intentionally deployable on Render's free compute plans. The API process embeds the BullMQ worker and ten-minute reconciler so the lab does not quietly create paid background-worker or cron resources.
+
 ```mermaid
 flowchart LR
-  Provider[Webhook provider] -->|POST /ingest/:key| API[Render web service\nFastify API]
+  Provider[Webhook provider] -->|POST /ingest/:key| API[Render free web service\nAPI + worker + reconciler]
   Dashboard[Render static site\nReact console] --> API
   API --> PG[(Render Postgres\nimmutable event ledger)]
   API --> KV[(Render Key Value\nBullMQ queue)]
-  KV --> Worker[Render background worker\ndelivery + rehearsal]
-  Worker --> Target[Customer destination]
-  Worker --> PG
-  Cron[Render cron job\nreconcile + retention] --> PG
-  Cron --> KV
+  API --> Target[Customer destination]
 ```
 
-The root [render.yaml](render.yaml) creates the entire topology as one Blueprint:
+The root [render.yaml](render.yaml) creates the free lab topology as one Blueprint:
 
 | Render primitive | Replay Room responsibility |
 |---|---|
 | Static site | Operator dashboard |
-| Web service | Public ingest and admin API |
-| Background worker | Delivery, retry, rehearsal, and replay |
+| Free web service | Public ingest, admin API, queue consumer, and reconciliation loop |
 | Postgres | Durable event, attempt, rehearsal, and audit ledger |
 | Key Value | BullMQ work queue and delayed retries |
-| Cron job | Stuck-delivery reconciliation and retention |
 | Preview environment | Disposable full-stack environment for PR testing |
+
+The free topology is honest about its constraints: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
 
 ## The guarded replay invariant
 
@@ -158,9 +165,9 @@ This is an early-stage project. Production hardening would add organization-scop
 npm run verify
 ```
 
-The verification gate type-checks the API/worker/cron code, runs domain, API, delivery, diagnosis, and heartbeat tests, and builds the production API and dashboard bundles.
+The verification gate type-checks the API/worker/cron code, runs domain, API, delivery, diagnosis, heartbeat, free-runtime, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
 
-GitHub Actions runs the same gate on every branch push and pull request, audits production dependencies at high severity, and builds the release Docker image on a clean Linux runner.
+GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs.
 
 ## Interview walkthrough
 
@@ -175,7 +182,7 @@ GitHub Actions runs the same gate on every branch push and pull request, audits 
 
 ## Status
 
-Version `0.1.0` is a production-shaped first implementation. It is ready for local verification and a first Render Blueprint deployment; it is not represented as a production-tested managed service.
+Version `0.1.0` is a production-shaped release candidate. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
 
 ## License
 
