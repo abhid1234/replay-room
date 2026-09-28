@@ -109,6 +109,10 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const endpoints = await store.listEndpoints();
     return endpoints.map(endpointView);
   });
+  app.get("/api/endpoints/reliability", { preHandler: adminGuard(config) }, async (request) => {
+    const query = z.object({ windowHours: z.coerce.number().int().min(1).max(168).default(24) }).parse(request.query);
+    return store.endpointReliability(query.windowHours);
+  });
   app.post("/api/endpoints", { preHandler: adminGuard(config) }, async (request, reply) => {
     const input = endpointSchema.parse(request.body);
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);

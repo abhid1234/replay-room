@@ -52,6 +52,17 @@ The Render cron service runs every ten minutes. It returns deliveries stuck in `
 
 Heartbeats are deliberately operational hints, not health-check dependencies. API readiness requires Postgres and Key Value, while a missing worker or cron heartbeat is exposed as `waiting` or `degraded` for an operator to investigate.
 
+## Endpoint reliability
+
+The reliability query computes a rolling destination view directly in Postgres. One aggregate covers event states and the last event timestamp; a second computes p95 latency from successful non-rehearsal delivery attempts. The success-rate denominator contains only terminal outcomes (`delivered + dead_letter`), so queued, delivering, and retrying work does not create a false SLO failure.
+
+Runway states are intentionally simple and explainable:
+
+- `healthy`: at least one successful delivery, no active recovery, and at least 99% terminal success;
+- `at_risk`: recovery is active, a dead letter exists above the breach threshold, or there is not yet a terminal sample;
+- `breached`: terminal success is below 95%;
+- `idle`: the endpoint received no events in the selected window.
+
 ## Incident diagnosis
 
 Event detail responses include a deterministic diagnosis derived from durable state and the delivery-attempt transcript. The classifier intentionally uses transparent rules instead of an opaque model:

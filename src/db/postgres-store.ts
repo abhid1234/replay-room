@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import type { CreateEventInput, CreateEventResult, Store } from "../domain/contracts.js";
+import { deliveryRate, reliabilityState } from "../domain/reliability.js";
 import type {
   AuditEntry,
   DashboardStats,
   DeliveryAttempt,
   Endpoint,
+  EndpointReliability,
   EventDetail,
   Rehearsal,
   WebhookEvent,
@@ -47,6 +49,63 @@ export class PostgresStore implements Store {
   async listEndpoints(): Promise<Endpoint[]> {
     const result = await this.pool.query("SELECT * FROM endpoints ORDER BY created_at DESC");
     return result.rows.map((row) => mapEndpoint(row as Row));
+  }
+
+  async endpointReliability(windowHours: number): Promise<EndpointReliability[]> {
+    const result = await this.pool.query(
+      `WITH event_rollup AS (
+         SELECT endpoint_id,
+           count(*)::int AS total,
+           count(*) FILTER (WHERE status = 'delivered')::int AS delivered,
+           count(*) FILTER (WHERE status = 'retrying')::int AS retrying,
+           count(*) FILTER (WHERE status = 'dead_letter')::int AS dead_letter,
+           max(received_at) AS last_event_at
+         FROM webhook_events
+         WHERE received_at >= now() - ($1::int * interval '1 hour')
+         GROUP BY endpoint_id
+       ), latency_rollup AS (
+         SELECT events.endpoint_id,
+           round(percentile_cont(0.95) WITHIN GROUP (ORDER BY attempts.duration_ms))::int AS p95_latency_ms
+         FROM delivery_attempts attempts
+         JOIN webhook_events events ON events.id = attempts.event_id
+         WHERE events.received_at >= now() - ($1::int * interval '1 hour')
+           AND attempts.mode <> 'rehearsal'
+           AND attempts.status_code BETWEEN 200 AND 299
+         GROUP BY events.endpoint_id
+       )
+       SELECT endpoints.id, endpoints.name, endpoints.destination_url,
+         coalesce(events.total, 0)::int AS total,
+         coalesce(events.delivered, 0)::int AS delivered,
+         coalesce(events.retrying, 0)::int AS retrying,
+         coalesce(events.dead_letter, 0)::int AS dead_letter,
+         events.last_event_at,
+         latency.p95_latency_ms
+       FROM endpoints
+       LEFT JOIN event_rollup events ON events.endpoint_id = endpoints.id
+       LEFT JOIN latency_rollup latency ON latency.endpoint_id = endpoints.id
+       ORDER BY events.last_event_at DESC NULLS LAST, endpoints.created_at DESC`,
+      [windowHours],
+    );
+    return result.rows.map((row) => {
+      const total = Number(row.total);
+      const delivered = Number(row.delivered);
+      const retrying = Number(row.retrying);
+      const deadLetter = Number(row.dead_letter);
+      return {
+        endpointId: String(row.id),
+        name: String(row.name),
+        destinationUrl: String(row.destination_url),
+        windowHours,
+        total,
+        delivered,
+        retrying,
+        deadLetter,
+        deliveryRate: deliveryRate(delivered, deadLetter),
+        p95LatencyMs: row.p95_latency_ms === null ? null : Number(row.p95_latency_ms),
+        lastEventAt: row.last_event_at === null ? null : iso(row.last_event_at),
+        state: reliabilityState(total, delivered, retrying, deadLetter),
+      };
+    });
   }
 
   async createEvent(input: CreateEventInput): Promise<CreateEventResult> {

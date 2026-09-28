@@ -39,6 +39,8 @@ EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npm run evidence:verify -- ./
 
 The command prints machine-readable JSON and exits non-zero for a modified or malformed bundle.
 
+The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
+
 ## Render architecture
 
 ```mermaid
@@ -122,6 +124,7 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | `GET` | `/api/stats` | Dashboard status counts |
 | `GET` | `/api/system` | Dependency latency, queue pressure, service heartbeats, and deploy identity |
 | `GET/POST` | `/api/endpoints` | List or create ingest endpoints |
+| `GET` | `/api/endpoints/reliability` | Per-destination volume, delivery rate, recovery state, and p95 latency |
 | `GET` | `/api/events` | List recent events |
 | `GET` | `/api/events/:id` | Event, attempts, rehearsals, and audit trail |
 | `GET` | `/api/events/:id/evidence` | Download the HMAC-sealed incident evidence bundle |

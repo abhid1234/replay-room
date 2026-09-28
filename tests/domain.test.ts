@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
+import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
@@ -131,5 +132,16 @@ describe("production configuration", () => {
       ADMIN_TOKEN: "production-admin-token",
       EVIDENCE_SIGNING_SECRET: "development-only-evidence-secret-change-me",
     })).toThrow("Production requires a unique evidence signing secret");
+  });
+});
+
+describe("endpoint reliability", () => {
+  it("separates healthy, at-risk, breached, and idle destinations", () => {
+    expect(reliabilityState(0, 0, 0, 0)).toBe("idle");
+    expect(reliabilityState(100, 100, 0, 0)).toBe("healthy");
+    expect(reliabilityState(100, 98, 1, 0)).toBe("at_risk");
+    expect(reliabilityState(100, 99, 0, 1)).toBe("at_risk");
+    expect(reliabilityState(100, 94, 0, 6)).toBe("breached");
+    expect(deliveryRate(2, 1)).toBe(66.7);
   });
 });

@@ -80,6 +80,21 @@ export interface DashboardStats {
   deliveryRate: number;
 }
 
+export interface EndpointReliability {
+  endpointId: string;
+  name: string;
+  destinationUrl: string;
+  windowHours: number;
+  total: number;
+  delivered: number;
+  retrying: number;
+  deadLetter: number;
+  deliveryRate: number;
+  p95LatencyMs: number | null;
+  lastEventAt: string | null;
+  state: "healthy" | "at_risk" | "breached" | "idle";
+}
+
 export interface IncidentDiagnosis {
   code: "nominal" | "queued" | "in_flight" | "transient" | "receiver_outage" | "rate_limited" | "contract_rejection" | "network_failure" | "attempts_exhausted";
   severity: "info" | "warning" | "critical";

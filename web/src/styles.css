@@ -108,6 +108,26 @@ input:focus, textarea:focus { border-color: var(--mint); }
 .stat span { color: var(--muted); font: 400 11px "IBM Plex Mono", monospace; }
 .stat strong { font: 600 46px "Barlow Condensed", sans-serif; letter-spacing: -.02em; }
 .stat.accent strong { color: var(--mint); }.stat.danger strong { color: var(--red); }
+.runway-board { margin-bottom: 22px; border: 1px solid var(--line); background: rgba(8, 31, 40, .82); }
+.runway-heading { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px; border-bottom: 1px solid var(--line); font: 500 12px "IBM Plex Mono", monospace; }
+.runway-heading small { color: var(--muted); font: 400 10px "IBM Plex Mono", monospace; }
+.runway-empty { padding: 22px 18px; color: var(--muted); }
+.runway-row { display: grid; grid-template-columns: 105px minmax(140px, 1.3fr) 70px minmax(150px, .8fr) 92px 112px; gap: 16px; align-items: center; min-height: 72px; padding: 11px 18px; border-bottom: 1px solid rgba(159, 247, 215, .09); }
+.runway-row:last-child { border-bottom: 0; }
+.runway-row > span:not(.runway-state) b, .runway-row > span:not(.runway-state) small { display: block; }
+.runway-row small { color: var(--muted); font-size: 10px; }
+.runway-state { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 500 10px "IBM Plex Mono", monospace; }
+.runway-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.runway-row.healthy .runway-state { color: var(--mint); }.runway-row.healthy .runway-state i { background: var(--mint); }
+.runway-row.at_risk .runway-state { color: var(--amber); }.runway-row.at_risk .runway-state i { background: var(--amber); }
+.runway-row.breached .runway-state { color: var(--red); }.runway-row.breached .runway-state i { background: var(--red); }
+.runway-name strong { font-weight: 500; }.runway-name small { margin-top: 4px; }
+.runway-volume b, .runway-latency b, .runway-failures b { font: 600 19px "Barlow Condensed", sans-serif; }
+.runway-rate > span { display: flex; justify-content: space-between; align-items: baseline; }
+.runway-rate > span b { font: 600 17px "Barlow Condensed", sans-serif; }
+.runway-rate > i { display: block; height: 4px; margin-top: 8px; background: #25434c; overflow: hidden; }
+.runway-rate > i > b { display: block; height: 100%; background: var(--mint); }
+.runway-row.at_risk .runway-rate > i > b { background: var(--amber); }.runway-row.breached .runway-rate > i > b { background: var(--red); }
 .console-grid { display: grid; grid-template-columns: .88fr 1.25fr; gap: 22px; }
 .panel { border: 1px solid var(--line); background: rgba(8, 31, 40, .88); }
 .panel-title { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--line); font: 500 12px "IBM Plex Mono", monospace; }
@@ -171,6 +191,9 @@ footer { margin-top: 30px; text-align: right; }
   .flight-board { grid-template-columns: 1fr; }
   .telemetry { border-right: 0; border-bottom: 1px solid var(--line); }
   .stats-grid { grid-template-columns: 1fr 1fr; }
+  .runway-heading { align-items: flex-start; flex-direction: column; padding-block: 14px; }
+  .runway-row { grid-template-columns: 100px 1fr 80px; }
+  .runway-rate { grid-column: 1 / -1; }
   .endpoint-form { grid-template-columns: 1fr; }.endpoint-form button { width: 100%; }
   .fabric-map { grid-template-columns: repeat(2, 1fr); }
   .fabric-node { border-bottom: 1px solid var(--line); }

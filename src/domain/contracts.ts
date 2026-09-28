@@ -4,6 +4,7 @@ import type {
   DeliveryAttempt,
   DeliveryMode,
   Endpoint,
+  EndpointReliability,
   EventDetail,
   EventStatus,
   Rehearsal,
@@ -28,6 +29,7 @@ export interface Store {
   createEndpoint(input: Omit<Endpoint, "id" | "createdAt">): Promise<Endpoint>;
   getEndpointByIngestKey(ingestKey: string): Promise<Endpoint | null>;
   listEndpoints(): Promise<Endpoint[]>;
+  endpointReliability(windowHours: number): Promise<EndpointReliability[]>;
   createEvent(input: CreateEventInput): Promise<CreateEventResult>;
   getEvent(id: string): Promise<EventDetail | null>;
   listEvents(limit: number): Promise<WebhookEvent[]>;

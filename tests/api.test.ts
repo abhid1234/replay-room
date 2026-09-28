@@ -90,6 +90,19 @@ describe("webhook API", () => {
       schemaVersion: "replay-room.evidence/v1",
       integrity: { algorithm: "HMAC-SHA256" },
     });
+
+    const reliability = await app.inject({
+      method: "GET",
+      url: "/api/endpoints/reliability?windowHours=24",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+    expect(reliability.json()[0]).toMatchObject({
+      name: "Test",
+      windowHours: 24,
+      total: 1,
+      deliveryRate: 100,
+      state: "at_risk",
+    });
   });
 
   it("keeps admin data behind bearer authentication", async () => {

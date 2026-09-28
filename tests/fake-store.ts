@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { CreateEventInput, CreateEventResult, Store } from "../src/domain/contracts.js";
-import type { AuditEntry, DashboardStats, DeliveryAttempt, Endpoint, EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
+import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
+import type { AuditEntry, DashboardStats, DeliveryAttempt, Endpoint, EndpointReliability, EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
 export class FakeStore implements Store {
   endpoint: Endpoint = {
@@ -16,6 +17,32 @@ export class FakeStore implements Store {
   async createEndpoint(input: Omit<Endpoint, "id" | "createdAt">) { this.endpoint = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; return this.endpoint; }
   async getEndpointByIngestKey(key: string) { return key === this.endpoint.ingestKey ? this.endpoint : null; }
   async listEndpoints() { return [this.endpoint]; }
+  async endpointReliability(windowHours: number): Promise<EndpointReliability[]> {
+    const events = [...this.events.values()].filter((event) => event.endpointId === this.endpoint.id);
+    const total = events.length;
+    const delivered = events.filter((event) => event.status === "delivered").length;
+    const retrying = events.filter((event) => event.status === "retrying").length;
+    const deadLetter = events.filter((event) => event.status === "dead_letter").length;
+    const successfulLatencies = this.attempts
+      .filter((attempt) => attempt.mode !== "rehearsal" && attempt.statusCode !== null && attempt.statusCode >= 200 && attempt.statusCode < 300)
+      .map((attempt) => attempt.durationMs)
+      .sort((left, right) => left - right);
+    const p95Index = Math.max(0, Math.ceil(successfulLatencies.length * 0.95) - 1);
+    return [{
+      endpointId: this.endpoint.id,
+      name: this.endpoint.name,
+      destinationUrl: this.endpoint.destinationUrl,
+      windowHours,
+      total,
+      delivered,
+      retrying,
+      deadLetter,
+      deliveryRate: deliveryRate(delivered, deadLetter),
+      p95LatencyMs: successfulLatencies[p95Index] ?? null,
+      lastEventAt: events.length ? events.map((event) => event.receivedAt).sort().at(-1) ?? null : null,
+      state: reliabilityState(total, delivered, retrying, deadLetter),
+    }];
+  }
   async createEvent(input: CreateEventInput): Promise<CreateEventResult> {
     const prior = [...this.events.values()].find((event) => event.endpointId === input.endpointId && input.idempotencyKey && event.idempotencyKey === input.idempotencyKey);
     if (prior) return { event: prior, duplicate: true };

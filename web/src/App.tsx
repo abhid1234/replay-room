@@ -13,6 +13,20 @@ type Event = {
 };
 type Stats = { total: number; queued: number; delivered: number; retrying: number; deadLetter: number; deliveryRate: number };
 type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; maxAttempts: number };
+type EndpointReliability = {
+  endpointId: string;
+  name: string;
+  destinationUrl: string;
+  windowHours: number;
+  total: number;
+  delivered: number;
+  retrying: number;
+  deadLetter: number;
+  deliveryRate: number;
+  p95LatencyMs: number | null;
+  lastEventAt: string | null;
+  state: "healthy" | "at_risk" | "breached" | "idle";
+};
 type ComponentState = "online" | "degraded" | "waiting";
 type SystemSnapshot = {
   observedAt: string;
@@ -47,6 +61,7 @@ export function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [reliability, setReliability] = useState<EndpointReliability[]>([]);
   const [system, setSystem] = useState<SystemSnapshot | null>(null);
   const [selected, setSelected] = useState<Detail | null>(null);
   const [message, setMessage] = useState("Enter the Render-generated admin token to open the console.");
@@ -67,10 +82,10 @@ export function App() {
     if (!token) return;
     if (!silent) setBusy(true);
     try {
-      const [nextStats, nextEvents, nextEndpoints, nextSystem] = await Promise.all([
-        request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"), request<SystemSnapshot>("/api/system"),
+      const [nextStats, nextEvents, nextEndpoints, nextReliability, nextSystem] = await Promise.all([
+        request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"), request<EndpointReliability[]>("/api/endpoints/reliability?windowHours=24"), request<SystemSnapshot>("/api/system"),
       ]);
-      setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setSystem(nextSystem);
+      setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setReliability(nextReliability); setSystem(nextSystem);
       localStorage.setItem("replay-room-token", token);
       setMessage(`Connected to ${API_BASE}`);
     } catch (error) {
@@ -162,6 +177,8 @@ export function App() {
         <Stat label="Dead letters" value={stats?.deadLetter ?? 0} danger />
       </section>
 
+      <ReliabilityBoard endpoints={reliability} />
+
       <section className="console-grid">
         <article className="panel event-panel">
           <div className="panel-title"><span>Event stream</span><button className="quiet" onClick={() => void refresh()}>Refresh</button></div>
@@ -202,6 +219,30 @@ export function App() {
 
 function Stat({ label, value, accent, danger }: { label: string; value: string | number; accent?: boolean; danger?: boolean }) {
   return <div className={`stat ${accent ? "accent" : ""} ${danger ? "danger" : ""}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function ReliabilityBoard({ endpoints }: { endpoints: EndpointReliability[] }) {
+  return <section className="runway-board" aria-label="Endpoint reliability over the last 24 hours">
+    <div className="runway-heading"><span>Endpoint runway / 24 hours</span><small>Success rate counts terminal deliveries. In-flight events do not reduce it.</small></div>
+    {endpoints.length === 0 ? <div className="runway-empty">Connect the live stack to inspect destination reliability.</div> : <div className="runway-rows">
+      {endpoints.map((endpoint) => <div className={`runway-row ${endpoint.state}`} key={endpoint.endpointId}>
+        <span className="runway-state"><i />{endpoint.state.replace("_", " ")}</span>
+        <span className="runway-name"><strong>{endpoint.name}</strong><small>{destinationHost(endpoint.destinationUrl)}</small></span>
+        <span className="runway-volume"><b>{endpoint.total}</b><small>events</small></span>
+        <span className="runway-rate">
+          <span><b>{endpoint.deliveryRate}%</b><small>delivered</small></span>
+          <i role="progressbar" aria-label={`${endpoint.name} delivery rate`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={endpoint.deliveryRate}><b style={{ width: `${endpoint.deliveryRate}%` }} /></i>
+        </span>
+        <span className="runway-latency"><b>{endpoint.p95LatencyMs === null ? "–" : `${endpoint.p95LatencyMs}ms`}</b><small>p95 latency</small></span>
+        <span className="runway-failures"><b>{endpoint.retrying} / {endpoint.deadLetter}</b><small>retrying / dead</small></span>
+      </div>)}
+    </div>}
+  </section>;
+}
+
+function destinationHost(destinationUrl: string): string {
+  try { return new URL(destinationUrl).host; }
+  catch { return destinationUrl; }
 }
 
 function RenderFabric({ system }: { system: SystemSnapshot | null }) {
