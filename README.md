@@ -25,6 +25,8 @@ Recent developer discussions keep converging on the same operational gap: receiv
 
 The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md). Provider setup and forwarding contracts are in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
+The synthetic incident and replay-guard corpus is also prepared as a deterministic two-configuration Hugging Face dataset bundle. Its generated manifest records record counts, byte lengths, and SHA-256 digests, while the build rejects secret-bearing or non-synthetic inputs. See [docs/FIXTURES.md](docs/FIXTURES.md) for generation, upload, and readback verification.
+
 ## The incident flight recorder
 
 The public dashboard opens with an interactive outage drill that follows a payment event through the real lifecycle vocabulary: durable receipt, worker claim, receiver failure, retry exhaustion, rehearsal, replay guard, and production delivery. It is explicitly labeled as a simulation and requires an operator action to run.
