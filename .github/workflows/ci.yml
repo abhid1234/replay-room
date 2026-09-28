@@ -2,7 +2,9 @@ name: verify
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: replay-room-${{ github.workflow }}-${{ github.ref }}
