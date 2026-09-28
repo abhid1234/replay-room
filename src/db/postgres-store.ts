@@ -7,6 +7,7 @@ import type {
   DashboardStats,
   DeliveryAttempt,
   DeliveryIntent,
+  DeliveryIntentStats,
   Endpoint,
   EndpointReliability,
   EventDetail,
@@ -299,6 +300,30 @@ export class PostgresStore implements Store {
        WHERE id = $1 AND state <> 'completed'`,
       [id, completedAt],
     );
+  }
+
+  async deliveryIntentStats(staleBeforeIso: string): Promise<DeliveryIntentStats> {
+    const result = await this.pool.query(
+      `SELECT
+         count(*) FILTER (WHERE state = 'pending')::int AS pending,
+         count(*) FILTER (WHERE state = 'dispatched')::int AS dispatched,
+         count(*) FILTER (WHERE state = 'processing')::int AS processing,
+         count(*) FILTER (WHERE
+           (state = 'pending' AND available_at < $1)
+           OR (state = 'dispatched' AND dispatched_at < $1)
+           OR (state = 'processing' AND processing_at < $1)
+         )::int AS stale
+       FROM delivery_intents
+       WHERE state <> 'completed'`,
+      [staleBeforeIso],
+    );
+    const row = result.rows[0] as Row;
+    return {
+      pending: Number(row.pending),
+      dispatched: Number(row.dispatched),
+      processing: Number(row.processing),
+      stale: Number(row.stale),
+    };
   }
 
   async stats(): Promise<DashboardStats> {

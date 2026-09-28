@@ -172,11 +172,13 @@ pre { height: 190px; overflow: auto; margin: 0 0 18px; padding: 16px; background
 .fabric-node strong { color: var(--paper); font: 500 11px "IBM Plex Mono", monospace; }
 .fabric-node small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.35; }
 .fabric-node b { grid-column: 2; margin-top: 14px; color: var(--sky); font: 500 11px "IBM Plex Mono", monospace; }
-.queue-load { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border-bottom: 1px solid var(--line); }
-.queue-load div { padding: 13px 16px; border-right: 1px solid var(--line); }
-.queue-load div:last-child { border-right: 0; }
-.queue-load dt { color: var(--muted); font: 400 10px "IBM Plex Mono", monospace; }
-.queue-load dd { margin: 5px 0 0; color: var(--paper); font: 600 22px "Barlow Condensed", sans-serif; }
+.queue-load, .intent-load { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border-bottom: 1px solid var(--line); }
+.queue-load div, .intent-load div { padding: 13px 16px; border-right: 1px solid var(--line); }
+.queue-load div:last-child, .intent-load div:last-child { border-right: 0; }
+.queue-load dt, .intent-load dt { color: var(--muted); font: 400 10px "IBM Plex Mono", monospace; }
+.queue-load dd, .intent-load dd { margin: 5px 0 0; color: var(--paper); font: 600 22px "Barlow Condensed", sans-serif; }
+.intent-load { background: rgba(103, 184, 215, .035); }
+.danger-text { color: var(--red) !important; }
 .fabric-note { margin: 0; padding: 13px 16px; color: var(--muted); font: 400 10px/1.5 "IBM Plex Mono", monospace; }
 footer { margin-top: 30px; text-align: right; }
 

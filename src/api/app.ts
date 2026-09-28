@@ -109,10 +109,11 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
   app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
   app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
     const databaseStartedAt = Date.now();
-    await store.ping();
+    const now = Date.now();
+    const staleBefore = new Date(now - 5 * 60_000).toISOString();
+    const [, intentOutbox] = await Promise.all([store.ping(), store.deliveryIntentStats(staleBefore)]);
     const databaseLatencyMs = Date.now() - databaseStartedAt;
     const queueHealth = await queue.health();
-    const now = Date.now();
     return {
       observedAt: new Date(now).toISOString(),
       deploy: {
@@ -125,6 +126,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       components: {
         api: { state: "online", uptimeSeconds: Math.round(process.uptime()) },
         database: { state: "online", latencyMs: databaseLatencyMs },
+        outbox: { state: intentOutbox.stale > 0 ? "degraded" : "online", ...intentOutbox },
         queue: { state: "online", latencyMs: queueHealth.latencyMs, jobs: queueHealth.jobs },
         worker: {
           state: heartbeatState(queueHealth.workerHeartbeat, 45_000, now),

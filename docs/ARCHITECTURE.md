@@ -65,6 +65,7 @@ In the free lab topology, the API process embeds both the queue worker and recon
 `GET /api/system` assembles the dashboard's live Render fabric from the services themselves:
 
 - the API measures a real Postgres round trip;
+- Postgres reports pending, dispatched, processing, and stale delivery intents;
 - Key Value responds to `PING` and BullMQ reports queue counts;
 - the worker refreshes an expiring Redis heartbeat every 15 seconds;
 - the reconciler refreshes its heartbeat after each successful run;

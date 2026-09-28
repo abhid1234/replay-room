@@ -34,6 +34,7 @@ type SystemSnapshot = {
   components: {
     api: { state: ComponentState; uptimeSeconds: number };
     database: { state: ComponentState; latencyMs: number };
+    outbox: { state: ComponentState; pending: number; dispatched: number; processing: number; stale: number };
     queue: { state: ComponentState; latencyMs: number; jobs: { waiting: number; active: number; delayed: number; failed: number } };
     worker: { state: ComponentState; heartbeatAgeSeconds: number | null };
     cron: { state: ComponentState; heartbeatAgeSeconds: number | null };
@@ -252,6 +253,7 @@ function RenderFabric({ system }: { system: SystemSnapshot | null }) {
     <div className="fabric-map">
       <FabricNode name="API" kind="web service" state={system?.components.api.state ?? "waiting"} metric={system ? `${system.components.api.uptimeSeconds}s up` : "waiting"} />
       <FabricNode name="Postgres" kind="durable ledger" state={system?.components.database.state ?? "waiting"} metric={system ? `${system.components.database.latencyMs}ms` : "waiting"} />
+      <FabricNode name="Intent outbox" kind="recoverable jobs" state={system?.components.outbox.state ?? "waiting"} metric={system ? `${system.components.outbox.stale} stale` : "waiting"} />
       <FabricNode name="Key Value" kind="BullMQ transport" state={system?.components.queue.state ?? "waiting"} metric={system ? `${system.components.queue.latencyMs}ms` : "waiting"} />
       <FabricNode name="Worker" kind={embedded ? "embedded consumer" : "background service"} state={system?.components.worker.state ?? "waiting"} metric={ageLabel(system?.components.worker.heartbeatAgeSeconds)} />
       <FabricNode name="Reconciler" kind={embedded ? "embedded loop" : "cron service"} state={system?.components.cron.state ?? "waiting"} metric={ageLabel(system?.components.cron.heartbeatAgeSeconds)} />
@@ -261,6 +263,12 @@ function RenderFabric({ system }: { system: SystemSnapshot | null }) {
       <div><dt>Active</dt><dd>{system?.components.queue.jobs.active ?? "–"}</dd></div>
       <div><dt>Delayed</dt><dd>{system?.components.queue.jobs.delayed ?? "–"}</dd></div>
       <div><dt>Failed</dt><dd>{system?.components.queue.jobs.failed ?? "–"}</dd></div>
+    </dl>
+    <dl className="intent-load">
+      <div><dt>Intent pending</dt><dd>{system?.components.outbox.pending ?? "–"}</dd></div>
+      <div><dt>Dispatched</dt><dd>{system?.components.outbox.dispatched ?? "–"}</dd></div>
+      <div><dt>Processing</dt><dd>{system?.components.outbox.processing ?? "–"}</dd></div>
+      <div><dt>Stale</dt><dd className={system?.components.outbox.stale ? "danger-text" : ""}>{system?.components.outbox.stale ?? "–"}</dd></div>
     </dl>
     <p className="fabric-note">{system ? `${system.deploy.service} / ${system.deploy.instance} / ${system.deploy.topology} / observed ${new Date(system.observedAt).toLocaleTimeString()}` : "Connect the live stack to read dependency latency, queue pressure, and service heartbeats."}</p>
   </article>;

@@ -3,6 +3,7 @@ import type {
   DashboardStats,
   DeliveryAttempt,
   DeliveryIntent,
+  DeliveryIntentStats,
   DeliveryMode,
   Endpoint,
   EndpointReliability,
@@ -53,6 +54,7 @@ export interface Store {
   claimDeliveryIntent(id: string, processingAt: string): Promise<boolean>;
   releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void>;
   completeDeliveryIntent(id: string, completedAt: string): Promise<void>;
+  deliveryIntentStats(staleBeforeIso: string): Promise<DeliveryIntentStats>;
   stats(): Promise<DashboardStats>;
   recoverPending(beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>>;
   deleteOlderThan(beforeIso: string): Promise<number>;

@@ -22,6 +22,13 @@ export interface DeliveryIntent {
   createdAt: string;
 }
 
+export interface DeliveryIntentStats {
+  pending: number;
+  dispatched: number;
+  processing: number;
+  stale: number;
+}
+
 export interface Endpoint {
   id: string;
   name: string;

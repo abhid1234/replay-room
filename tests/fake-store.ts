@@ -122,6 +122,21 @@ export class FakeStore implements Store {
     const intent = this.intents.get(id);
     if (intent) this.intents.set(id, { ...intent, state: "completed", completedAt });
   }
+  async deliveryIntentStats(staleBeforeIso: string) {
+    const active = [...this.intents.values()].filter((intent) => intent.state !== "completed");
+    return {
+      pending: active.filter((intent) => intent.state === "pending").length,
+      dispatched: active.filter((intent) => intent.state === "dispatched").length,
+      processing: active.filter((intent) => intent.state === "processing").length,
+      stale: active.filter((intent) => (
+        intent.state === "pending" && intent.availableAt < staleBeforeIso
+      ) || (
+        intent.state === "dispatched" && Boolean(intent.dispatchedAt && intent.dispatchedAt < staleBeforeIso)
+      ) || (
+        intent.state === "processing" && Boolean(intent.processingAt && intent.processingAt < staleBeforeIso)
+      )).length,
+    };
+  }
   async stats(): Promise<DashboardStats> { const all = [...this.events.values()]; const delivered = all.filter((e) => e.status === "delivered").length; return { total: all.length, queued: all.filter((e) => e.status === "queued").length, delivered, retrying: all.filter((e) => e.status === "retrying").length, deadLetter: all.filter((e) => e.status === "dead_letter").length, deliveryRate: all.length ? delivered / all.length * 100 : 100 }; }
   async recoverPending(_beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>> { return []; }
   async deleteOlderThan(_beforeIso: string): Promise<number> { return 0; }

@@ -236,8 +236,17 @@ describe("webhook API", () => {
 
   it("reports the live service fabric without exposing it publicly", async () => {
     const queue = new FakeQueue();
+    const store = new FakeStore();
     await queue.enqueue({ eventId: "e7c33ce4-1ed2-475b-8941-383b37ea4690", mode: "live" });
-    const app = await buildApp({ config, store: new FakeStore(), queue });
+    const created = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: "stale-intent",
+      headers: {},
+      payload: { type: "fabric.test" },
+      payloadSha256: "d".repeat(64),
+    });
+    await store.createDeliveryIntent("stale-fabric-intent", { eventId: created.event.id, mode: "live" }, "2020-01-01T00:00:00.000Z");
+    const app = await buildApp({ config, store, queue });
     apps.push(app);
 
     const denied = await app.inject({ method: "GET", url: "/api/system" });
@@ -255,6 +264,7 @@ describe("webhook API", () => {
       components: {
         api: { state: "online" },
         database: { state: "online" },
+        outbox: { state: "degraded", pending: 1, dispatched: 0, processing: 0, stale: 1 },
         queue: { state: "online", jobs: { waiting: 1 } },
         worker: { state: "online" },
         cron: { state: "online" },

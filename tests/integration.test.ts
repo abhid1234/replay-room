@@ -127,7 +127,9 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
     expect(await store.prepareDeliveryIntentDispatch(first.intent.id, "2026-09-27T12:00:00.000Z", "2026-09-27T11:55:00.000Z")).toBe(true);
     expect(await store.claimDeliveryIntent(first.intent.id, "2026-09-27T12:00:01.000Z")).toBe(true);
     expect(await store.claimDeliveryIntent(first.intent.id, "2026-09-27T12:00:02.000Z")).toBe(false);
+    expect(await store.deliveryIntentStats("2026-09-27T12:00:02.000Z")).toEqual({ pending: 0, dispatched: 0, processing: 1, stale: 1 });
     await store.completeDeliveryIntent(first.intent.id, "2026-09-27T12:00:03.000Z");
+    expect(await store.deliveryIntentStats("2026-09-27T12:00:04.000Z")).toEqual({ pending: 0, dispatched: 0, processing: 0, stale: 0 });
     expect(await store.listDispatchableIntents("2026-09-27T13:00:00.000Z", "2026-09-27T12:55:00.000Z")).toEqual([]);
   });
 });
