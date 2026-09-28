@@ -1,5 +1,7 @@
 # Architecture and failure model
 
+![Replay Room architecture](../diagrams/replay-room-render-architecture.svg)
+
 ## Lifecycle
 
 ```text
@@ -30,6 +32,8 @@ After resolving a valid endpoint but before signature verification or database w
 
 The default window is 600 requests per minute per endpoint and is configurable with `INGEST_RATE_LIMIT_PER_MINUTE`. Rejected requests return HTTP 429 plus remaining-budget and retry timing headers; they never enter Postgres or BullMQ.
 
+The operator surface has a second Redis-backed limiter applied globally before protected route handlers. It prevents repeated dashboard or API reads from creating unbounded Postgres work. The default is 300 requests per minute per client and is configurable with `OPERATOR_RATE_LIMIT_PER_MINUTE`.
+
 ## Outbound network boundary
 
 Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP protocols. Immediately before every live delivery, rehearsal, or replay, the worker resolves the hostname and rejects any answer in loopback, private, carrier-grade NAT, link-local, multicast, or reserved space. A security rejection is recorded as a terminal attempt and dead-lettered instead of entering a retry loop.
@@ -50,7 +54,9 @@ Production replay requires a passing record with the same payload digest and des
 
 ## Recovery
 
-The Render cron service runs every ten minutes. It returns deliveries stuck in `delivering` for more than five minutes to the queue, recovers queued or retrying records stranded by a temporary Redis failure, and deletes event records past the configured retention window. The Postgres ledger remains authoritative; Redis is transport, not system of record.
+The reconciler runs every ten minutes. It returns deliveries stuck in `delivering` for more than five minutes to the queue, recovers queued or retrying records stranded by a temporary Redis failure, and deletes event records past the configured retention window. The Postgres ledger remains authoritative; Redis is transport, not system of record.
+
+In the free lab topology, the API process embeds both the queue worker and reconciliation loop because Render does not offer free background-worker or cron compute. In the production upgrade, those responsibilities run as separate services. `/api/system` reports `embedded-free` or `split-services` so the dashboard never labels an embedded loop as a dedicated service.
 
 ## Runtime telemetry
 
@@ -59,10 +65,10 @@ The Render cron service runs every ten minutes. It returns deliveries stuck in `
 - the API measures a real Postgres round trip;
 - Key Value responds to `PING` and BullMQ reports queue counts;
 - the worker refreshes an expiring Redis heartbeat every 15 seconds;
-- the cron reconciler refreshes its heartbeat after each successful run;
+- the reconciler refreshes its heartbeat after each successful run;
 - Render's service, instance, and Git commit environment values identify the deployed revision.
 
-Heartbeats are deliberately operational hints, not health-check dependencies. API readiness requires Postgres and Key Value, while a missing worker or cron heartbeat is exposed as `waiting` or `degraded` for an operator to investigate.
+Heartbeats are deliberately operational hints, not health-check dependencies. API readiness requires Postgres and Key Value, while a missing worker or reconciler heartbeat is exposed as `waiting` or `degraded` for an operator to investigate.
 
 ## Endpoint reliability
 

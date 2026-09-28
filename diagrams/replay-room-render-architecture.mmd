@@ -1,0 +1,50 @@
+graph LR
+  Provider[Webhook provider]
+  Operator[Incident operator]
+  Receiver[Customer receiver]
+
+  subgraph FreeLab[Render free lab]
+    Site[Static site<br/>React console]
+    Web[Web service<br/>API + worker + reconciler]
+    PG[(Postgres<br/>durable ledger)]
+    KV[(Key Value<br/>queue + rate limits)]
+  end
+
+  subgraph PortableProof[Portable proof]
+    Bundle[Signed evidence<br/>JSON transcript]
+    CLI[replay-room CLI<br/>inspect + verify]
+  end
+
+  subgraph Production[Production upgrade]
+    ProdAPI[Web service<br/>API only]
+    ProdWorker[Background worker]
+    ProdCron[Cron reconciler]
+    PaidData[(Backed-up Postgres<br/>persistent Key Value)]
+  end
+
+  Provider -->|POST ingest| Web
+  Operator -->|public drill| Site
+  Site -->|bearer API| Web
+  Web -->|commit first| PG
+  Web -->|enqueue + throttle| KV
+  KV -->|consume| Web
+  Web -->|deliver or rehearse| Receiver
+  PG -->|export incident| Bundle
+  Bundle -->|offline verification| CLI
+
+  Web -. upgrade .-> ProdAPI
+  ProdAPI --> PaidData
+  PaidData --> ProdWorker
+  ProdWorker --> Receiver
+  ProdCron --> PaidData
+
+  classDef user fill:#0b252f,stroke:#67b8d7,color:#e9eee7;
+  classDef render fill:#10333f,stroke:#9ff7d7,color:#e9eee7;
+  classDef data fill:#071a22,stroke:#ffb454,color:#e9eee7;
+  classDef proof fill:#201b2d,stroke:#b497ff,color:#f2edff;
+  classDef prod fill:#2d2020,stroke:#ff6b5e,color:#fff0ed;
+  class Provider,Operator,Receiver user;
+  class Site,Web render;
+  class PG,KV data;
+  class Bundle,CLI proof;
+  class ProdAPI,ProdWorker,ProdCron,PaidData prod;

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { parseEvidenceBundle, verifyEvidenceBundle } from "../domain/evidence.js";
 
 interface EvidenceSummary {
@@ -60,6 +59,4 @@ async function main(): Promise<void> {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  void main();
-}
+void main();

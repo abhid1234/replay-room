@@ -58,14 +58,9 @@ Public ingest is protected by an atomic per-endpoint limit in Render Key Value. 
 
 The default Blueprint is intentionally deployable on Render's free compute plans. The API process embeds the BullMQ worker and ten-minute reconciler so the lab does not quietly create paid background-worker or cron resources.
 
-```mermaid
-flowchart LR
-  Provider[Webhook provider] -->|POST /ingest/:key| API[Render free web service\nAPI + worker + reconciler]
-  Dashboard[Render static site\nReact console] --> API
-  API --> PG[(Render Postgres\nimmutable event ledger)]
-  API --> KV[(Render Key Value\nBullMQ queue)]
-  API --> Target[Customer destination]
-```
+![Replay Room architecture: free Render lab, portable evidence, and production upgrade](diagrams/replay-room-render-architecture.svg)
+
+The diagram is available as [Mermaid source](diagrams/replay-room-render-architecture.mmd), an [editable Excalidraw scene](diagrams/replay-room-render-architecture.excalidraw), SVG, and PNG.
 
 The root [render.yaml](render.yaml) creates the free lab topology as one Blueprint:
 
