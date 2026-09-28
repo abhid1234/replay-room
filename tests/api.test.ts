@@ -83,7 +83,7 @@ describe("webhook API", () => {
     expect(response.headers["cache-control"]).toBe("public, max-age=300");
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
-      info: { title: "Replay Room API", version: "0.1.0" },
+      info: { title: "Replay Room API", version: "0.1.1" },
       paths: { "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });

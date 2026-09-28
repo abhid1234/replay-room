@@ -42,7 +42,7 @@ npx @avee1234/replay-room inspect incident.evidence.json
 EVIDENCE_SIGNING_SECRET=... npx @avee1234/replay-room verify incident.evidence.json
 ```
 
-The CLI exits non-zero when the document is malformed, the content changes, or the seal does not match. The [v0.1.0 GitHub release](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) already carries the exact package tarball, CycloneDX SBOM, signed SLSA provenance, and a signed SBOM attestation; only npm registry publication remains gated. Incident evidence is deployment evidence, not a public timestamp or third-party attestation, and the distinction is documented.
+The CLI exits non-zero when the document is malformed, the content changes, or the seal does not match. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) carries the exact package tarball, CycloneDX SBOM, signed SLSA provenance, and a signed SBOM attestation; only npm registry publication remains gated. Incident evidence is deployment evidence, not a public timestamp or third-party attestation, and the distinction is documented.
 
 ## Built for Render's failure modes
 
