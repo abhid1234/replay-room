@@ -10,7 +10,7 @@ AgentRoute is the benchmark for launch completeness: product, public proof, pack
 | Product site | Render static site | Blueprint-ready; public URL pending | Public landing page with architecture and links |
 | npm | `@avee1234/replay-room` library and CLI | Name unclaimed; package gate passes; not published | Provenance-bearing registry version and install smoke test |
 | Release | [v0.1.0](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) | Published from `7049351`; tarball and CycloneDX SBOM hashes match the release metadata; SLSA provenance and CycloneDX attestations verify | Public release, tarball, SBOM, and signed attestations |
-| Fixtures | Synthetic incident corpus and conformance runner | Six incident/risk cases and seven replay-guard cases implemented | Optional public dataset mirror with readback verification |
+| Fixtures | Synthetic incident corpus, conformance runner, and Hugging Face dataset bundle | Six incident/risk cases and seven replay-guard cases implemented; deterministic dataset card, JSONL configurations, hashes, and upload/readback procedure ready | Public dataset mirror with readback verification |
 | Schema | `replay-room.evidence/v1` Zod and JSON Schema contracts | Implemented | Valid, malformed, and tampered conformance cases |
 | Security | HMAC evidence, SSRF controls, redaction, CodeQL, dependency audit | Implemented with documented DNS TOCTOU limitation | Clean automated gates and release review |
 | Launch essay | `docs/LAUNCH.md` | Draft complete; not published | Reviewed public essay linked from repository |

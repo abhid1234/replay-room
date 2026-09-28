@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "replay-room.fixture-dataset/v1",
+  "name": "Replay Room incident and replay guard fixtures",
+  "version": "0.1.0",
+  "license": "MIT",
+  "synthetic": true,
+  "source": "https://github.com/abhid1234/replay-room",
+  "recordCounts": {
+    "incidents": 6,
+    "replayGuard": 7
+  },
+  "files": {
+    "data/incidents.jsonl": {
+      "bytes": 8626,
+      "sha256": "3e1b583485f85cdee6fc4b94a179024dbc4d3dccc957cfbf21f883f3bf60a295"
+    },
+    "data/replay-guard.jsonl": {
+      "bytes": 7117,
+      "sha256": "1bdefba548ab0d8a1814384d518ebe4495fb3ffcd13a06b80ad883b5812f1caa"
+    }
+  }
+}
