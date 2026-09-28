@@ -6,7 +6,7 @@ AgentRoute is the benchmark for launch completeness: product, public proof, pack
 |---|---|---|---|
 | Product | Fastify API, BullMQ delivery engine, Postgres ledger, React operator console | Implemented and locally verified | `npm run verify` |
 | Playground | Public outage drill and live incident console on Render | Build-ready; public URL pending | Public URL plus cold-start and drill smoke test |
-| GitHub | `abhid1234/replay-room` | Public repository; feature PR open | Reviewed merge to `main` and required checks |
+| GitHub | `abhid1234/replay-room` | Public repository with required verification workflows | `main` contains the release candidate and required checks pass |
 | Product site | Render static site | Blueprint-ready; public URL pending | Public landing page with architecture and links |
 | npm | `@avee1234/replay-room` library and CLI | Name unclaimed; package gate passes; not published | Provenance-bearing registry version and install smoke test |
 | Release | Manual attested release workflow | Implemented; not run | GitHub release with tarball and CycloneDX SBOM |

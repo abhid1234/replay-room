@@ -32,7 +32,7 @@ Render's current platform surface directly matches the architecture:
 | Click replay | Rehearse, bind evidence, approve, then replay |
 | Retry count | Full attempt and audit timeline |
 | Queue implementation detail | Queue and worker are visible architectural primitives |
-| One-process demo | Multi-service Render Blueprint |
+| One-process demo | Cost-explicit free lab plus a documented split-service production upgrade |
 
 ## Explicit non-claims
 
