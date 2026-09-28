@@ -55,6 +55,14 @@ describe("webhook API", () => {
     expect(store.audit.map((entry) => entry.action)).toEqual(["event.received"]);
     expect(queue.jobs).toHaveLength(1);
     expect(queue.jobs[0]?.options?.jobId).toMatch(/^live-/);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/api/events/${first.json<{ eventId: string }>().eventId}`,
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ diagnosis: { code: "queued", severity: "info" } });
   });
 
   it("keeps admin data behind bearer authentication", async () => {

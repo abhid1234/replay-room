@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { IncidentDrill } from "./IncidentDrill";
 
 type EventStatus = "queued" | "delivering" | "retrying" | "delivered" | "dead_letter";
 type Event = {
@@ -17,6 +18,14 @@ type Detail = Event & {
   attempts: Array<{ id: string; mode: string; statusCode: number | null; error: string | null; durationMs: number; createdAt: string }>;
   rehearsals: Array<{ id: string; passed: boolean; destinationUrl: string; notes: string; createdAt: string }>;
   audit: Array<{ id: string; action: string; actor: string; reason: string | null; createdAt: string }>;
+  diagnosis: {
+    code: string;
+    severity: "info" | "warning" | "critical";
+    headline: string;
+    summary: string;
+    evidence: string[];
+    nextAction: string;
+  };
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
@@ -41,9 +50,9 @@ export function App() {
     return body as T;
   }, [auth]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (!token) return;
-    setBusy(true);
+    if (!silent) setBusy(true);
     try {
       const [nextStats, nextEvents, nextEndpoints] = await Promise.all([
         request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"),
@@ -53,10 +62,15 @@ export function App() {
       setMessage(`Connected to ${API_BASE}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load Replay Room");
-    } finally { setBusy(false); }
+    } finally { if (!silent) setBusy(false); }
   }, [request, token]);
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    if (!token) return;
+    void refresh();
+    const timer = window.setInterval(() => void refresh(true), 5_000);
+    return () => window.clearInterval(timer);
+  }, [refresh, token]);
 
   const openEvent = async (id: string) => {
     try { setSelected(await request<Detail>(`/api/events/${id}`)); }
@@ -91,22 +105,25 @@ export function App() {
     <main>
       <header className="masthead">
         <div className="brand"><span className="mark">RR</span><span>Replay Room</span></div>
-        <div className="eyebrow">webhook operations lab / built for Render</div>
+        <div className="eyebrow">Event recovery control / Render</div>
       </header>
 
       <section className="hero">
         <div>
-          <p className="kicker">INCIDENTS NEED A REHEARSAL</p>
-          <h1>Retry the event.<br/><em>Not the mistake.</em></h1>
-          <p className="lede">Capture every webhook, let workers deliver it, rehearse dead letters against a safe target, then approve a production replay with an immutable audit trail.</p>
+          <p className="kicker">Webhook incidents, reconstructed</p>
+          <h1>Every event leaves a flight recorder.</h1>
+          <p className="lede">Replay Room explains how delivery failed, rehearses the exact recovery, and seals the evidence before anyone can replay production traffic.</p>
         </div>
         <div className="connection-panel">
-          <label>Admin token</label>
-          <input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Render-generated secret" />
+          <div className="connection-title"><span>Live stack</span><i className={token ? "online" : ""} /></div>
+          <label htmlFor="admin-token">Admin token</label>
+          <input id="admin-token" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Render-generated secret" />
           <button onClick={() => void refresh()} disabled={busy}>{busy ? "Connecting..." : "Open console"}</button>
           <small>{message}</small>
         </div>
       </section>
+
+      <IncidentDrill />
 
       <section className="stats-grid">
         <Stat label="Events" value={stats?.total ?? 0} />
@@ -169,7 +186,14 @@ function EventInspector({ event, onRehearse, onReplay }: {
   const [target, setTarget] = useState(event.endpoint.destinationUrl);
   const [reason, setReason] = useState("Receiver fix verified; replay approved after rehearsal.");
   return <div className="inspector">
-    <div className="guard-banner"><span>REPLAY GUARD</span><strong>{event.status === "dead_letter" ? "Waiting for rehearsal evidence" : "Replay locked"}</strong></div>
+    <div className={`diagnosis ${event.diagnosis.severity}`}>
+      <div><span>Flight recorder diagnosis</span><b>{event.diagnosis.code.replaceAll("_", " ")}</b></div>
+      <h3>{event.diagnosis.headline}</h3>
+      <p>{event.diagnosis.summary}</p>
+      <ul>{event.diagnosis.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+      <small>{event.diagnosis.nextAction}</small>
+    </div>
+    <div className="guard-banner"><span>Replay guard</span><strong>{event.status === "dead_letter" ? "Waiting for rehearsal evidence" : "Replay locked"}</strong></div>
     <pre>{JSON.stringify(event.payload, null, 2)}</pre>
     <div className="action-form">
       <label>Rehearsal / replay target</label><input value={target} onChange={(e) => setTarget(e.target.value)} />

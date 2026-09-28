@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
+import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
 import { assertSafeDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
 import type { Rehearsal, WebhookEvent } from "../src/domain/types.js";
@@ -47,5 +48,33 @@ describe("security helpers", () => {
   it("blocks private production targets", () => {
     expect(() => assertSafeDestination("http://127.0.0.1:4000", false)).toThrow("Private-network");
     expect(assertSafeDestination("https://example.com/hook", false).hostname).toBe("example.com");
+  });
+});
+
+describe("incident diagnosis", () => {
+  it("identifies a repeated receiver outage and gives an evidence-backed action", () => {
+    const diagnosis = diagnoseEvent({
+      ...event,
+      endpoint: {
+        id: event.endpointId,
+        name: "Billing",
+        ingestKey: "hook_test_123456",
+        destinationUrl: "https://example.com/hook",
+        signingSecret: null,
+        maxAttempts: 5,
+        createdAt: event.receivedAt,
+      },
+      attempts: [
+        { id: "a1", eventId: event.id, mode: "live", destinationUrl: "https://example.com/hook", statusCode: 503, responseBody: "down", error: null, durationMs: 120, createdAt: event.updatedAt },
+        { id: "a2", eventId: event.id, mode: "live", destinationUrl: "https://example.com/hook", statusCode: 502, responseBody: "down", error: null, durationMs: 90, createdAt: event.updatedAt },
+      ],
+      rehearsals: [],
+      audit: [],
+    });
+
+    expect(diagnosis.code).toBe("receiver_outage");
+    expect(diagnosis.severity).toBe("critical");
+    expect(diagnosis.evidence).toContain("HTTP sequence: 503 → 502");
+    expect(diagnosis.nextAction).toContain("rehearse");
   });
 });

@@ -38,4 +38,16 @@ Production replay requires a passing record with the same payload digest and des
 
 ## Recovery
 
-The Render cron service runs every ten minutes. It returns deliveries stuck in `delivering` for more than five minutes to the queue and deletes event records past the configured retention window. The Postgres ledger remains authoritative; Redis is transport, not system of record.
+The Render cron service runs every ten minutes. It returns deliveries stuck in `delivering` for more than five minutes to the queue, recovers queued or retrying records stranded by a temporary Redis failure, and deletes event records past the configured retention window. The Postgres ledger remains authoritative; Redis is transport, not system of record.
+
+## Incident diagnosis
+
+Event detail responses include a deterministic diagnosis derived from durable state and the delivery-attempt transcript. The classifier intentionally uses transparent rules instead of an opaque model:
+
+- no HTTP response across all attempts indicates DNS, TLS, firewall, or network reachability;
+- HTTP 429 indicates receiver throttling;
+- HTTP 5xx indicates a receiver outage;
+- permanent HTTP 4xx indicates a contract, validation, or authentication rejection;
+- queued, delivering, retrying, and delivered states each have non-alarm guidance.
+
+Diagnosis never changes state and never bypasses the replay guard. It is operator context, not replay authority.

@@ -79,3 +79,12 @@ export interface DashboardStats {
   deadLetter: number;
   deliveryRate: number;
 }
+
+export interface IncidentDiagnosis {
+  code: "nominal" | "queued" | "in_flight" | "transient" | "receiver_outage" | "rate_limited" | "contract_rejection" | "network_failure" | "attempts_exhausted";
+  severity: "info" | "warning" | "critical";
+  headline: string;
+  summary: string;
+  evidence: string[];
+  nextAction: string;
+}

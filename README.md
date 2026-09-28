@@ -21,6 +21,12 @@ Recent developer discussions keep converging on the same operational gap: receiv
 
 The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md).
 
+## The incident flight recorder
+
+The public dashboard opens with an interactive outage drill that follows a payment event through the real lifecycle vocabulary: durable receipt, worker claim, receiver failure, retry exhaustion, rehearsal, replay guard, and production delivery. It is explicitly labeled as a simulation and requires an operator action to run.
+
+For live events, the API computes a deterministic diagnosis from the current state and attempt transcript. It distinguishes receiver outages, rate limiting, contract rejection, network failure, active recovery, and healthy delivery, then gives the operator evidence and a concrete next action. The rules are explainable and tested; no external model or hidden prompt decides whether a replay is safe.
+
 ## Render architecture
 
 ```mermaid
@@ -132,10 +138,10 @@ The verification gate type-checks the API/worker/cron code, runs domain and deli
 
 ## Interview walkthrough
 
-1. Start with a webhook sent to the `retry` demo sink.
-2. Show the immediate `202` response while the worker owns delivery.
-3. Let retries exhaust into `dead_letter`.
-4. Open the complete attempt timeline.
+1. Run the public outage drill and narrate how each checkpoint maps to Render.
+2. Send a webhook to the `retry` demo sink and show the immediate `202` response.
+3. Let the worker exhaust retries into `dead_letter`.
+4. Open the flight-recorder diagnosis and complete attempt timeline.
 5. Rehearse against the accepting sink.
 6. Try to replay to a different destination and show the deterministic guard rejection.
 7. Replay to the rehearsed destination with an operator reason.

@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { DeliveryQueue, Store } from "../domain/contracts.js";
+import { diagnoseEvent } from "../domain/diagnosis.js";
 import { evaluateReplay } from "../domain/replay-guard.js";
 import { assertSafeDestination, redactHeaders, sha256, verifySignature } from "../domain/security.js";
 
@@ -88,7 +89,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
-    return event;
+    return { ...event, diagnosis: diagnoseEvent(event) };
   });
 
   app.post("/api/events/:id/rehearse", { preHandler: adminGuard(config) }, async (request, reply) => {
