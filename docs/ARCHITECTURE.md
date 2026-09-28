@@ -38,7 +38,7 @@ The operator surface has a second Redis-backed limiter applied globally before p
 
 ## Inbound authenticity
 
-Each endpoint chooses one explicit signature profile: unsigned, Replay Room HMAC, GitHub, or Stripe. Generic and GitHub profiles verify the exact raw request bytes with HMAC-SHA256 and their native headers. Stripe verification signs `<timestamp>.<raw body>`, accepts any matching `v1` digest, and rejects timestamps outside `SIGNATURE_TOLERANCE_SECONDS` (five minutes by default) to limit replayed requests. Signature headers are redacted before the event is persisted.
+Each endpoint chooses one explicit signature profile: unsigned, Replay Room HMAC, GitHub, or Stripe. Generic and GitHub profiles verify the exact raw request bytes with HMAC-SHA256 and their native headers. Stripe verification signs `<timestamp>.<raw body>`, accepts any matching `v1` digest, and rejects timestamps outside `SIGNATURE_TOLERANCE_SECONDS` (five minutes by default) to limit replayed requests. Signature headers are redacted before the event is persisted. The worker re-signs the exact outbound JSON for every live delivery, rehearsal, and replay; Stripe receives a fresh timestamp because the original delivery window has expired.
 
 The endpoint schema fails closed on inconsistent configuration: signed profiles require a secret, while unsigned endpoints cannot retain one. Endpoint responses expose only the profile and whether a secret is configured.
 

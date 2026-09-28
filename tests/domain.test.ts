@@ -7,7 +7,7 @@ import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
-import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
+import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, signWebhookPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
@@ -87,6 +87,7 @@ describe("security helpers", () => {
       "stripe-signature": "[REDACTED]",
       "x-hub-signature-256": "[REDACTED]",
     });
+    expect(verifyWebhookSignature("stripe", secret, body, signWebhookPayload("stripe", secret, body, now), 300, now)).toBe(true);
   });
   it("blocks private production targets", () => {
     expect(() => assertSafeDestination("http://127.0.0.1:4000", false)).toThrow("Private-network");

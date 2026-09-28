@@ -62,6 +62,19 @@ export function verifyWebhookSignature(
   return signatures.some((signature) => safeEqual(signature, expected));
 }
 
+export function signWebhookPayload(
+  profile: Exclude<SignatureProfile, "none">,
+  secret: string,
+  rawPayload: string,
+  nowMs = Date.now(),
+): Record<string, string> {
+  if (profile === "generic") return { "x-replay-signature": signPayload(secret, rawPayload) };
+  if (profile === "github") return { "x-hub-signature-256": signPayload(secret, rawPayload) };
+  const timestamp = Math.floor(nowMs / 1_000);
+  const digest = createHmac("sha256", secret).update(`${timestamp}.${rawPayload}`).digest("hex");
+  return { "stripe-signature": `t=${timestamp},v1=${digest}` };
+}
+
 export function redactHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string> {
   return Object.fromEntries(
     Object.entries(headers).map(([name, value]) => [

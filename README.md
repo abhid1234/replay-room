@@ -22,7 +22,7 @@ Recent developer discussions keep converging on the same operational gap: receiv
 - operator reason and append-only audit history;
 - a Postgres delivery-intent outbox that survives queue loss, suppresses duplicate replay approvals, and lets reconciliation reconstruct exact jobs.
 
-The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md).
+The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md). Provider setup and forwarding contracts are in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## The incident flight recorder
 

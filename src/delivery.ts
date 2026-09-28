@@ -1,6 +1,6 @@
 import type { DeliveryJob, DeliveryQueue, DeliveryResult, Store } from "./domain/contracts.js";
 import { isRetryableStatus, retryDelayMs } from "./domain/retry.js";
-import { assertSafeResolvedDestination, type DestinationLookup, UnsafeDestinationError } from "./domain/security.js";
+import { assertSafeResolvedDestination, type DestinationLookup, signWebhookPayload, UnsafeDestinationError } from "./domain/security.js";
 import { deliveryJobKey, dispatchDeliveryIntent } from "./dispatch.js";
 
 interface DeliveryDependencies {
@@ -55,6 +55,10 @@ async function deliverClaimed(
   let responseBody: string | null = null;
   let errorMessage: string | null = null;
   let unsafeDestination = false;
+  const body = JSON.stringify(detail.payload);
+  const signatureHeaders = detail.endpoint.signingSecret && detail.endpoint.signatureProfile !== "none"
+    ? signWebhookPayload(detail.endpoint.signatureProfile, detail.endpoint.signingSecret, body, startedAt)
+    : {};
 
   try {
     destination = (await assertSafeResolvedDestination(destinationInput, deps.allowPrivateTargets, deps.lookupFn)).toString();
@@ -66,8 +70,9 @@ async function deliverClaimed(
         "x-replay-room-event": detail.id,
         "x-replay-room-mode": job.mode,
         ...(detail.idempotencyKey ? { "idempotency-key": detail.idempotencyKey } : {}),
+        ...signatureHeaders,
       },
-      body: JSON.stringify(detail.payload),
+      body,
       signal: AbortSignal.timeout(10_000),
     });
     statusCode = response.status;

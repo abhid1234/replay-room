@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { deliver } from "../src/delivery.js";
 import { deliveryJobKey, scheduleDelivery } from "../src/dispatch.js";
 import type { DeliveryJob, DeliveryQueue } from "../src/domain/contracts.js";
-import { sha256 } from "../src/domain/security.js";
+import { sha256, signPayload } from "../src/domain/security.js";
 import { FakeStore } from "./fake-store.js";
 
 class FakeQueue implements DeliveryQueue {
@@ -33,6 +33,20 @@ describe("delivery processor", () => {
     expect(result.nextStatus).toBe("delivered");
     expect((await store.getEvent(eventId))?.status).toBe("delivered");
     expect(store.attempts[0]?.statusCode).toBe(204);
+  });
+
+  it("re-signs outbound payloads with the endpoint provider profile", async () => {
+    const { store, queue, eventId } = await setup();
+    store.endpoint.signatureProfile = "github";
+    store.endpoint.signingSecret = "github-delivery-secret";
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(null, { status: 202 }));
+
+    await deliver({ eventId, mode: "live" }, { store, queue, allowPrivateTargets: false, fetchFn, lookupFn: publicLookup, now: () => 1_000 });
+
+    const [destination, request] = fetchFn.mock.calls[0]!;
+    expect(destination).toBe("https://example.com/hook");
+    const headers = request?.headers as Record<string, string>;
+    expect(headers["x-hub-signature-256"]).toBe(signPayload(store.endpoint.signingSecret, String(request?.body)));
   });
 
   it("schedules retry for a transient failure", async () => {
