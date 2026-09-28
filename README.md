@@ -166,7 +166,13 @@ This is an early-stage project. Production hardening would add organization-scop
 npm run verify
 ```
 
-The verification gate type-checks the API/worker/cron code, runs domain, API, delivery-intent race, queue-loss recovery, diagnosis, heartbeat, free-runtime, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
+The verification gate type-checks the API/worker/cron code, runs domain, API, delivery-intent race, queue-loss recovery, diagnosis, heartbeat, free-runtime, live-smoke contract, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
+
+After a Render Blueprint is live, one command produces machine-readable deployment evidence while tolerating a free-tier cold start:
+
+```bash
+npm run smoke:live -- --api https://YOUR-API.onrender.com --site https://YOUR-CONSOLE.onrender.com
+```
 
 GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. The [v0.1.0 release](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) was built from commit `7049351`, and both attestations verify against its published tarball digest.
 
