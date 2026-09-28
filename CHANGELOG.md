@@ -2,7 +2,7 @@
 
 All notable changes to Replay Room are documented here.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-09-27
 
 ### Added
 
