@@ -43,6 +43,7 @@ const config: AppConfig = {
   ALLOW_PRIVATE_TARGETS: true,
   MAX_PAYLOAD_BYTES: 262_144,
   INGEST_RATE_LIMIT_PER_MINUTE: 2,
+  OPERATOR_RATE_LIMIT_PER_MINUTE: 300,
   RETENTION_DAYS: 30,
   EMBEDDED_WORKER: false,
   RECONCILE_INTERVAL_SECONDS: 600,
@@ -54,6 +55,38 @@ afterEach(async () => {
 });
 
 describe("webhook API", () => {
+  it("rate limits authenticated operator reads before repeated database work", async () => {
+    const app = await buildApp({
+      config: { ...config, OPERATOR_RATE_LIMIT_PER_MINUTE: 2 },
+      store: new FakeStore(),
+      queue: new FakeQueue(),
+    });
+    apps.push(app);
+    const request = { method: "GET" as const, url: "/api/stats", headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` } };
+
+    expect((await app.inject(request)).statusCode).toBe(200);
+    expect((await app.inject(request)).statusCode).toBe(200);
+    const limited = await app.inject(request);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.headers["retry-after"]).toBeDefined();
+    expect(limited.json()).toMatchObject({ error: "API rate limit exceeded" });
+  });
+
+  it("publishes a versioned OpenAPI contract without authentication", async () => {
+    const app = await buildApp({ config, store: new FakeStore(), queue: new FakeQueue() });
+    apps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/openapi.json" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("public, max-age=300");
+    expect(response.json()).toMatchObject({
+      openapi: "3.1.0",
+      info: { title: "Replay Room API", version: "0.1.0" },
+      paths: { "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay": {} },
+      components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
+    });
+  });
+
   it("accepts once, persists before enqueue, and deduplicates retries", async () => {
     const store = new FakeStore();
     const queue = new FakeQueue();
@@ -170,7 +203,7 @@ describe("webhook API", () => {
     expect(denied.statusCode).toBe(401);
     expect(health.json()).toMatchObject({ status: "ok", dependencies: { queueLatencyMs: 2 } });
     expect(allowed.json()).toMatchObject({
-      deploy: { service: "replay-room-api", environment: "test" },
+      deploy: { service: "replay-room-api", environment: "test", topology: "split-services" },
       components: {
         api: { state: "online" },
         database: { state: "online" },

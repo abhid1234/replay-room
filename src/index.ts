@@ -7,6 +7,7 @@ export {
 } from "./domain/evidence.js";
 export { diagnoseEvent } from "./domain/diagnosis.js";
 export { evaluateReplay } from "./domain/replay-guard.js";
+export { openApiDocument } from "./api/openapi.js";
 export type {
   AuditEntry,
   DeliveryAttempt,

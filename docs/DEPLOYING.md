@@ -39,6 +39,8 @@ The durable source of truth is Postgres. Losing the free Key Value instance can 
 
 The Blueprint generates `ADMIN_TOKEN` and `EVIDENCE_SIGNING_SECRET`. Do not copy either value into Git, logs, fixtures, or screenshots.
 
+Both public ingest and operator routes use Redis-backed distributed limits. `INGEST_RATE_LIMIT_PER_MINUTE` applies per endpoint key; `OPERATOR_RATE_LIMIT_PER_MINUTE` applies at the HTTP boundary before protected routes reach Postgres.
+
 ## Production upgrade
 
 For continuous delivery processing, move the queue consumer and reconciler out of the web service:

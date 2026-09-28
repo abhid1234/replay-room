@@ -9,18 +9,20 @@ const databaseUrl = process.env.DATABASE_URL ?? "postgresql://replay_room:replay
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379/15";
 
 describe.runIf(run)("managed Postgres and Key Value contracts", () => {
-  const store = new PostgresStore(databaseUrl);
-  const queue = new RedisDeliveryQueue(redisUrl);
+  let store: PostgresStore;
+  let queue: RedisDeliveryQueue;
 
   beforeAll(async () => {
+    store = new PostgresStore(databaseUrl);
+    queue = new RedisDeliveryQueue(redisUrl);
     await migrate(databaseUrl);
     await migrate(databaseUrl);
     await store.pool.query("TRUNCATE audit_log, rehearsals, delivery_attempts, webhook_events, endpoints CASCADE");
   });
 
   afterAll(async () => {
-    await queue.close();
-    await store.close();
+    await queue?.close();
+    await store?.close();
   });
 
   it("persists an idempotent incident transcript and computes reliability", async () => {

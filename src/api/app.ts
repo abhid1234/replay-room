@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
+import { Redis } from "ioredis";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { DeliveryQueue, Store } from "../domain/contracts.js";
@@ -10,6 +12,7 @@ import { evaluateReplay } from "../domain/replay-guard.js";
 import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifySignature } from "../domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
 import type { Endpoint } from "../domain/types.js";
+import { openApiDocument } from "./openapi.js";
 
 interface Dependencies {
   config: AppConfig;
@@ -57,6 +60,28 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     methods: ["GET", "POST", "OPTIONS"],
   });
 
+  const rateLimitRedis = config.NODE_ENV === "test"
+    ? null
+    : new Redis(config.REDIS_URL, { connectTimeout: 1_000, maxRetriesPerRequest: 1 });
+  await app.register(rateLimit, {
+    global: true,
+    max: config.OPERATOR_RATE_LIMIT_PER_MINUTE,
+    timeWindow: 60_000,
+    nameSpace: "replay-room:api-rate-limit:",
+    skipOnError: false,
+    ...(rateLimitRedis ? { redis: rateLimitRedis } : {}),
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: 429,
+      error: "API rate limit exceeded",
+      retryAfterSeconds: Math.max(1, Math.ceil(context.ttl / 1_000)),
+    }),
+  });
+  if (rateLimitRedis) {
+    app.addHook("onClose", async () => {
+      await rateLimitRedis.quit();
+    });
+  }
+
   app.get("/health", async (_request, reply) => {
     try {
       const databaseStartedAt = Date.now();
@@ -75,6 +100,11 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     }
   });
 
+  app.get("/openapi.json", async (_request, reply) => {
+    reply.header("cache-control", "public, max-age=300");
+    return openApiDocument;
+  });
+
   app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
   app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
     const databaseStartedAt = Date.now();
@@ -89,6 +119,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
         instance: process.env.RENDER_INSTANCE_ID ?? "local",
         environment: config.NODE_ENV,
+        topology: config.EMBEDDED_WORKER ? "embedded-free" : "split-services",
       },
       components: {
         api: { state: "online", uptimeSeconds: Math.round(process.uptime()) },
@@ -188,7 +219,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     return { queued: true, eventId: id, mode: "replay" };
   });
 
-  app.post("/ingest/:ingestKey", async (request, reply) => {
+  app.post("/ingest/:ingestKey", { config: { rateLimit: false } }, async (request, reply) => {
     const { ingestKey } = z.object({ ingestKey: z.string().min(12).max(100) }).parse(request.params);
     const endpoint = await store.getEndpointByIngestKey(ingestKey);
     if (!endpoint) return reply.code(404).send({ error: "Unknown ingest endpoint" });
@@ -250,6 +281,12 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     }
     if (error instanceof UnsafeDestinationError) {
       return reply.code(400).send({ error: error.message });
+    }
+    if (typeof error === "object" && error !== null && "statusCode" in error && error.statusCode === 429) {
+      return reply.code(429).send({
+        error: "API rate limit exceeded",
+        retryAfterSeconds: Number(reply.getHeader("retry-after") ?? 1),
+      });
     }
     request.log.error(error);
     return reply.code(500).send({ error: "Internal server error", requestId: request.id });

@@ -131,6 +131,7 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Database-backed health check |
+| `GET` | `/openapi.json` | Versioned OpenAPI 3.1 contract |
 | `POST` | `/ingest/:ingestKey` | Accept and deduplicate an event |
 | `GET` | `/api/stats` | Dashboard status counts |
 | `GET` | `/api/system` | Dependency latency, queue pressure, service heartbeats, and deploy identity |
@@ -150,6 +151,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Endpoint signing secrets remain server-side and are redacted from every API response and evidence export.
 - Payloads are capped at 256 KiB by default.
 - Per-endpoint ingest limits reject overload before database or queue writes.
+- Redis-backed operator limits reject abusive authenticated reads before database work.
 - Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
 - Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.

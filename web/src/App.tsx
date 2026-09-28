@@ -30,7 +30,7 @@ type EndpointReliability = {
 type ComponentState = "online" | "degraded" | "waiting";
 type SystemSnapshot = {
   observedAt: string;
-  deploy: { service: string; commit: string; instance: string; environment: string };
+  deploy: { service: string; commit: string; instance: string; environment: string; topology: "embedded-free" | "split-services" };
   components: {
     api: { state: ComponentState; uptimeSeconds: number };
     database: { state: ComponentState; latencyMs: number };
@@ -246,14 +246,15 @@ function destinationHost(destinationUrl: string): string {
 }
 
 function RenderFabric({ system }: { system: SystemSnapshot | null }) {
+  const embedded = system?.deploy.topology === "embedded-free";
   return <article className="panel fabric-panel" aria-live="polite">
     <div className="panel-title"><span>Live Render fabric</span><span className="mono">{system?.deploy.commit ?? "not connected"}</span></div>
     <div className="fabric-map">
       <FabricNode name="API" kind="web service" state={system?.components.api.state ?? "waiting"} metric={system ? `${system.components.api.uptimeSeconds}s up` : "waiting"} />
       <FabricNode name="Postgres" kind="durable ledger" state={system?.components.database.state ?? "waiting"} metric={system ? `${system.components.database.latencyMs}ms` : "waiting"} />
       <FabricNode name="Key Value" kind="BullMQ transport" state={system?.components.queue.state ?? "waiting"} metric={system ? `${system.components.queue.latencyMs}ms` : "waiting"} />
-      <FabricNode name="Worker" kind="background service" state={system?.components.worker.state ?? "waiting"} metric={ageLabel(system?.components.worker.heartbeatAgeSeconds)} />
-      <FabricNode name="Reconciler" kind="cron service" state={system?.components.cron.state ?? "waiting"} metric={ageLabel(system?.components.cron.heartbeatAgeSeconds)} />
+      <FabricNode name="Worker" kind={embedded ? "embedded consumer" : "background service"} state={system?.components.worker.state ?? "waiting"} metric={ageLabel(system?.components.worker.heartbeatAgeSeconds)} />
+      <FabricNode name="Reconciler" kind={embedded ? "embedded loop" : "cron service"} state={system?.components.cron.state ?? "waiting"} metric={ageLabel(system?.components.cron.heartbeatAgeSeconds)} />
     </div>
     <dl className="queue-load">
       <div><dt>Waiting</dt><dd>{system?.components.queue.jobs.waiting ?? "–"}</dd></div>
@@ -261,7 +262,7 @@ function RenderFabric({ system }: { system: SystemSnapshot | null }) {
       <div><dt>Delayed</dt><dd>{system?.components.queue.jobs.delayed ?? "–"}</dd></div>
       <div><dt>Failed</dt><dd>{system?.components.queue.jobs.failed ?? "–"}</dd></div>
     </dl>
-    <p className="fabric-note">{system ? `${system.deploy.service} / ${system.deploy.instance} / observed ${new Date(system.observedAt).toLocaleTimeString()}` : "Connect the live stack to read dependency latency, queue pressure, and service heartbeats."}</p>
+    <p className="fabric-note">{system ? `${system.deploy.service} / ${system.deploy.instance} / ${system.deploy.topology} / observed ${new Date(system.observedAt).toLocaleTimeString()}` : "Connect the live stack to read dependency latency, queue pressure, and service heartbeats."}</p>
   </article>;
 }
 
