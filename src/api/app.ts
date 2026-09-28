@@ -10,7 +10,7 @@ import { diagnoseEvent } from "../domain/diagnosis.js";
 import { createEvidenceBundle } from "../domain/evidence.js";
 import { evaluateReplay } from "../domain/replay-guard.js";
 import { assessReplayRisk } from "../domain/replay-risk.js";
-import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifySignature } from "../domain/security.js";
+import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifyWebhookSignature } from "../domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
 import type { Endpoint } from "../domain/types.js";
 import { deliveryJobKey, dispatchDeliveryIntent, scheduleDelivery } from "../dispatch.js";
@@ -26,7 +26,16 @@ const endpointSchema = z.object({
   name: z.string().trim().min(2).max(80),
   destinationUrl: z.string().url(),
   signingSecret: z.string().min(16).max(256).nullable().optional(),
+  signatureProfile: z.enum(["none", "generic", "github", "stripe"]).default("none"),
   maxAttempts: z.number().int().min(1).max(20).default(5),
+}).superRefine((value, context) => {
+  const hasSecret = Boolean(value.signingSecret);
+  if (value.signatureProfile === "none" && hasSecret) {
+    context.addIssue({ code: "custom", path: ["signatureProfile"], message: "Choose a signature profile when a signing secret is configured" });
+  }
+  if (value.signatureProfile !== "none" && !hasSecret) {
+    context.addIssue({ code: "custom", path: ["signingSecret"], message: "A signing secret is required for this signature profile" });
+  }
 });
 
 const rehearsalSchema = z.object({
@@ -157,6 +166,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       ingestKey: `hook_${randomBytes(12).toString("base64url")}`,
       destinationUrl: input.destinationUrl,
       signingSecret: input.signingSecret ?? null,
+      signatureProfile: input.signatureProfile,
       maxAttempts: input.maxAttempts,
     });
     reply.code(201);
@@ -280,9 +290,14 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     }
 
     const rawPayload = (request as typeof request & { rawBody?: string }).rawBody ?? JSON.stringify(request.body ?? null);
-    if (endpoint.signingSecret) {
-      const signature = String(request.headers["x-replay-signature"] ?? "");
-      if (!signature || !verifySignature(endpoint.signingSecret, rawPayload, signature)) {
+    if (endpoint.signingSecret && endpoint.signatureProfile !== "none") {
+      if (!verifyWebhookSignature(
+        endpoint.signatureProfile,
+        endpoint.signingSecret,
+        rawPayload,
+        request.headers,
+        config.SIGNATURE_TOLERANCE_SECONDS,
+      )) {
         return reply.code(401).send({ error: "Invalid webhook signature" });
       }
     }

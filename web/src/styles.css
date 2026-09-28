@@ -30,9 +30,9 @@ body {
     var(--night);
   background-size: 32px 32px, 32px 32px, auto, auto;
 }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
-button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
 button:disabled { cursor: wait; opacity: .72; }
 main { width: min(1480px, 100%); margin: 0 auto; padding: 24px 40px 56px; }
 
@@ -50,8 +50,8 @@ h1 { margin: 14px 0 20px; font: 700 clamp(64px, 8.5vw, 132px)/.82 "Barlow Conden
 .connection-title i { width: 9px; height: 9px; background: var(--amber); border-radius: 50%; box-shadow: 0 0 0 5px rgba(255, 180, 84, .1); }
 .connection-title i.online { background: var(--mint); box-shadow: 0 0 0 5px rgba(159, 247, 215, .1); }
 label { display: block; margin-bottom: 8px; color: var(--muted); font: 500 11px "IBM Plex Mono", monospace; }
-input, textarea { width: 100%; border: 1px solid rgba(137, 160, 165, .4); background: #041219; color: var(--paper); padding: 13px 14px; outline: none; }
-input:focus, textarea:focus { border-color: var(--mint); }
+input, textarea, select { width: 100%; border: 1px solid rgba(137, 160, 165, .4); background: #041219; color: var(--paper); padding: 13px 14px; outline: none; }
+input:focus, textarea:focus, select:focus { border-color: var(--mint); }
 .connection-panel button, .endpoint-form button, .action-form button { width: 100%; margin-top: 12px; border: 0; background: var(--mint); color: var(--night); padding: 13px; font-weight: 600; }
 .connection-panel small { display: block; color: var(--muted); margin-top: 14px; line-height: 1.5; }
 
@@ -168,8 +168,10 @@ pre { height: 190px; overflow: auto; margin: 0 0 18px; padding: 16px; background
 .actions { grid-column: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.action-form button { margin: 0; }.action-form .danger-button { background: var(--red); }
 .timeline { margin-top: 20px; border-top: 1px solid var(--line); }.timeline div { display: grid; grid-template-columns: 90px 150px 1fr; padding: 11px 0; border-bottom: 1px solid rgba(159, 247, 215, .09); font-size: 11px; }.timeline span,.timeline small { color: var(--muted); }.timeline strong { color: var(--mint); font: 500 10px "IBM Plex Mono", monospace; }
 .bottom-grid { display: grid; grid-template-columns: .88fr 1.25fr; gap: 22px; margin-top: 22px; }
-.endpoint-form { padding: 18px; display: grid; grid-template-columns: 1fr 1.5fr auto; gap: 10px; }
-.endpoint-form button { width: auto; margin: 0; }
+.endpoint-form { padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.endpoint-form label { margin: 0; }.endpoint-form label:nth-child(2), .endpoint-form button { grid-column: 1 / -1; }
+.endpoint-form label span { display: block; margin-bottom: 6px; color: var(--muted); font: 400 10px "IBM Plex Mono", monospace; }
+.endpoint-form button { width: 100%; margin: 2px 0 0; }
 .fabric-map { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); }
 .fabric-node { min-width: 0; min-height: 112px; padding: 18px 14px; border-right: 1px solid var(--line); display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-content: start; }
 .fabric-node:last-child { border-right: 0; }

@@ -36,6 +36,8 @@ services:
         value: "600"
       - key: OPERATOR_RATE_LIMIT_PER_MINUTE
         value: "300"
+      - key: SIGNATURE_TOLERANCE_SECONDS
+        value: "300"
       - key: RETENTION_DAYS
         value: "30"
       - key: EMBEDDED_WORKER

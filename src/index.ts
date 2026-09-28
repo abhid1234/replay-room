@@ -9,6 +9,7 @@ export { diagnoseEvent } from "./domain/diagnosis.js";
 export { evaluateReplay } from "./domain/replay-guard.js";
 export { assessReplayRisk } from "./domain/replay-risk.js";
 export type { ReplayRiskAssessment, ReplayRiskLevel, ReplayRiskSignal } from "./domain/replay-risk.js";
+export { verifyWebhookSignature } from "./domain/security.js";
 export { openApiDocument } from "./api/openapi.js";
 export type {
   AuditEntry,
@@ -20,5 +21,6 @@ export type {
   EventStatus,
   IncidentDiagnosis,
   Rehearsal,
+  SignatureProfile,
   WebhookEvent,
 } from "./domain/types.js";

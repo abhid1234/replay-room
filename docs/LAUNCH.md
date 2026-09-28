@@ -12,6 +12,8 @@ Most webhook inspectors can resend. Replay Room is built around a stricter idea:
 
 Replay Room persists the original webhook before acknowledging it. The durable record includes an idempotency key, redacted headers, the payload, and a SHA-256 digest. Every delivery attempt is appended with its mode, destination, response, error, and duration.
 
+An endpoint can verify the provider-native signature before that write: generic HMAC, GitHub's SHA-256 header, or Stripe's timestamp-bound `v1` signature. The raw request bytes are the verification input, and signature headers are redacted from the durable transcript.
+
 That transcript drives a deterministic diagnosis. A sequence of 5xx responses is a receiver outage. A 429 is throttling. A 4xx response is a contract or authentication rejection. Attempts that never receive HTTP responses point to DNS, TLS, firewall, or network reachability. The rules are small enough to explain during an incident and specific enough to recommend the next action.
 
 No model gets to decide whether production traffic can be replayed.

@@ -12,7 +12,7 @@ type Event = {
   receivedAt: string;
 };
 type Stats = { total: number; queued: number; delivered: number; retrying: number; deadLetter: number; deliveryRate: number };
-type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; maxAttempts: number };
+type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; signatureProfile: "none" | "generic" | "github" | "stripe"; maxAttempts: number };
 type EndpointReliability = {
   endpointId: string;
   name: string;
@@ -115,9 +115,16 @@ export function App() {
 
   const createEndpoint = async (form: HTMLFormElement) => {
     const data = new FormData(form);
+    const signingSecret = String(data.get("signingSecret") || "").trim();
     const endpoint = await request<Endpoint>("/api/endpoints", {
       method: "POST",
-      body: JSON.stringify({ name: data.get("name"), destinationUrl: data.get("destinationUrl"), maxAttempts: 5 }),
+      body: JSON.stringify({
+        name: data.get("name"),
+        destinationUrl: data.get("destinationUrl"),
+        signatureProfile: data.get("signatureProfile"),
+        ...(signingSecret ? { signingSecret } : {}),
+        maxAttempts: Number(data.get("maxAttempts") || 5),
+      }),
     });
     setMessage(`Endpoint created. Send webhooks to ${API_BASE}/ingest/${endpoint.ingestKey}`);
     form.reset(); await refresh();
@@ -213,8 +220,11 @@ export function App() {
         <article className="panel">
           <div className="panel-title">Create endpoint</div>
           <form className="endpoint-form" onSubmit={(event) => { event.preventDefault(); void createEndpoint(event.currentTarget).catch((error) => setMessage(error.message)); }}>
-            <input name="name" required minLength={2} placeholder="Billing events" />
-            <input name="destinationUrl" required type="url" placeholder="https://your-app.com/webhooks" />
+            <label><span>Name</span><input name="name" required minLength={2} placeholder="Billing events" /></label>
+            <label><span>Receiver URL</span><input name="destinationUrl" required type="url" placeholder="https://your-app.com/webhooks" /></label>
+            <label><span>Signature profile</span><select name="signatureProfile" defaultValue="none"><option value="none">Unsigned</option><option value="generic">Replay Room HMAC</option><option value="github">GitHub</option><option value="stripe">Stripe</option></select></label>
+            <label><span>Signing secret</span><input name="signingSecret" type="password" minLength={16} placeholder="Leave empty for unsigned" /></label>
+            <label><span>Retry budget</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={5} /></label>
             <button>Create ingest URL</button>
           </form>
         </article>

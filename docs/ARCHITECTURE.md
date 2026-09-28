@@ -36,6 +36,12 @@ The default window is 600 requests per minute per endpoint and is configurable w
 
 The operator surface has a second Redis-backed limiter applied globally before protected route handlers. It prevents repeated dashboard or API reads from creating unbounded Postgres work. The default is 300 requests per minute per client and is configurable with `OPERATOR_RATE_LIMIT_PER_MINUTE`.
 
+## Inbound authenticity
+
+Each endpoint chooses one explicit signature profile: unsigned, Replay Room HMAC, GitHub, or Stripe. Generic and GitHub profiles verify the exact raw request bytes with HMAC-SHA256 and their native headers. Stripe verification signs `<timestamp>.<raw body>`, accepts any matching `v1` digest, and rejects timestamps outside `SIGNATURE_TOLERANCE_SECONDS` (five minutes by default) to limit replayed requests. Signature headers are redacted before the event is persisted.
+
+The endpoint schema fails closed on inconsistent configuration: signed profiles require a secret, while unsigned endpoints cannot retain one. Endpoint responses expose only the profile and whether a secret is configured.
+
 ## Outbound network boundary
 
 Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP protocols. Immediately before every live delivery, rehearsal, or replay, the worker resolves the hostname and rejects any answer in loopback, private, carrier-grade NAT, link-local, multicast, or reserved space. A security rejection is recorded as a terminal attempt and dead-lettered instead of entering a retry loop.
@@ -104,6 +110,6 @@ Diagnosis never changes state and never bypasses the replay guard. It is operato
 
 ## Evidence integrity
 
-The evidence endpoint constructs a versioned document from the durable event record, diagnosis, attempts, rehearsals, and audit entries. It serializes that content with recursively sorted object keys, records a SHA-256 content digest, and seals the same canonical bytes with HMAC-SHA256 using `EVIDENCE_SIGNING_SECRET`.
+The evidence endpoint constructs a versioned document from the durable event record, diagnosis, duplicate-side-effect risk assessment, attempts, rehearsals, and audit entries. It serializes that content with recursively sorted object keys, records a SHA-256 content digest, and seals the same canonical bytes with HMAC-SHA256 using `EVIDENCE_SIGNING_SECRET`.
 
 The signing key is independent of webhook endpoint secrets and the admin token. Render generates it at deployment time. Neither endpoint secrets nor the evidence key are returned to the browser. This proves that a bundle still matches the state exported by this Replay Room deployment; it is not a third-party timestamp or public-key attestation.

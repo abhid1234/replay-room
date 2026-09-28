@@ -36,9 +36,9 @@ export class PostgresStore implements Store {
 
   async createEndpoint(input: Omit<Endpoint, "id" | "createdAt">): Promise<Endpoint> {
     const result = await this.pool.query(
-      `INSERT INTO endpoints (name, ingest_key, destination_url, signing_secret, max_attempts)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [input.name, input.ingestKey, input.destinationUrl, input.signingSecret, input.maxAttempts],
+      `INSERT INTO endpoints (name, ingest_key, destination_url, signing_secret, signature_profile, max_attempts)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [input.name, input.ingestKey, input.destinationUrl, input.signingSecret, input.signatureProfile, input.maxAttempts],
     );
     return mapEndpoint(result.rows[0] as Row);
   }
@@ -387,6 +387,7 @@ function mapEndpoint(row: Row): Endpoint {
   return {
     id: String(row.id), name: String(row.name), ingestKey: String(row.ingest_key),
     destinationUrl: String(row.destination_url), signingSecret: row.signing_secret ? String(row.signing_secret) : null,
+    signatureProfile: row.signature_profile as Endpoint["signatureProfile"],
     maxAttempts: Number(row.max_attempts), createdAt: iso(row.created_at),
   };
 }

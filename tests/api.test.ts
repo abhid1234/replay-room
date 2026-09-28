@@ -3,6 +3,7 @@ import { buildApp } from "../src/api/app.js";
 import type { AppConfig } from "../src/config.js";
 import type { DeliveryJob, DeliveryQueue } from "../src/domain/contracts.js";
 import { FakeStore } from "./fake-store.js";
+import { signPayload } from "../src/domain/security.js";
 
 class FakeQueue implements DeliveryQueue {
   jobs: Array<{ job: DeliveryJob; options?: { delayMs?: number; jobId?: string } }> = [];
@@ -44,6 +45,7 @@ const config: AppConfig = {
   MAX_PAYLOAD_BYTES: 262_144,
   INGEST_RATE_LIMIT_PER_MINUTE: 2,
   OPERATOR_RATE_LIMIT_PER_MINUTE: 300,
+  SIGNATURE_TOLERANCE_SECONDS: 300,
   RETENTION_DAYS: 30,
   EMBEDDED_WORKER: false,
   RECONCILE_INTERVAL_SECONDS: 600,
@@ -184,6 +186,36 @@ describe("webhook API", () => {
     });
     expect(unsafeEndpoint.statusCode).toBe(400);
     expect(unsafeEndpoint.json()).toEqual({ error: "Private-network destinations are disabled" });
+  });
+
+  it("accepts provider-native GitHub signatures and rejects invalid payloads", async () => {
+    const store = new FakeStore();
+    const queue = new FakeQueue();
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+    const secret = "github-webhook-secret-value";
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/endpoints",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}`, "content-type": "application/json" },
+      payload: { name: "GitHub events", destinationUrl: "https://example.com/github", signatureProfile: "github", signingSecret: secret },
+    });
+    const rawPayload = JSON.stringify({ action: "opened", pull_request: { id: 42 } });
+    const headers = {
+      "content-type": "application/json",
+      "x-hub-signature-256": signPayload(secret, rawPayload),
+      "idempotency-key": "github-delivery-42",
+    };
+
+    const accepted = await app.inject({ method: "POST", url: `/ingest/${created.json().ingestKey}`, headers, payload: rawPayload });
+    const rejected = await app.inject({ method: "POST", url: `/ingest/${created.json().ingestKey}`, headers: { ...headers, "x-hub-signature-256": signPayload(secret, "tampered") }, payload: rawPayload });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ signatureProfile: "github", signingSecretConfigured: true });
+    expect(accepted.statusCode).toBe(202);
+    expect(rejected.statusCode).toBe(401);
+    expect(store.events).toHaveLength(1);
+    expect((await store.getEvent(accepted.json().eventId))?.headers["x-hub-signature-256"]).toBe("[REDACTED]");
   });
 
   it("persists one replay intent and suppresses duplicate operator approvals", async () => {

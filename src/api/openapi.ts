@@ -104,11 +104,13 @@ export const openApiDocument = {
       }),
       CreateEndpoint: object(["name", "destinationUrl"], {
         name: { type: "string", minLength: 2, maxLength: 80 }, destinationUrl: uri,
-        signingSecret: { type: ["string", "null"], minLength: 16, maxLength: 256 }, maxAttempts: { type: "integer", minimum: 1, maximum: 20, default: 5 },
+        signingSecret: { type: ["string", "null"], minLength: 16, maxLength: 256 },
+        signatureProfile: { enum: ["none", "generic", "github", "stripe"], default: "none" },
+        maxAttempts: { type: "integer", minimum: 1, maximum: 20, default: 5 },
       }),
-      Endpoint: object(["id", "name", "ingestKey", "destinationUrl", "maxAttempts", "createdAt", "signingSecretConfigured"], {
+      Endpoint: object(["id", "name", "ingestKey", "destinationUrl", "signatureProfile", "maxAttempts", "createdAt", "signingSecretConfigured"], {
         id: uuid, name: { type: "string" }, ingestKey: { type: "string" }, destinationUrl: uri,
-        maxAttempts: { type: "integer" }, createdAt: dateTime, signingSecretConfigured: { type: "boolean" },
+        signatureProfile: { enum: ["none", "generic", "github", "stripe"] }, maxAttempts: { type: "integer" }, createdAt: dateTime, signingSecretConfigured: { type: "boolean" },
       }),
       EndpointList: { type: "array", items: { $ref: "#/components/schemas/Endpoint" } },
       WebhookEvent: object(["id", "endpointId", "headers", "payload", "payloadSha256", "status", "attemptCount", "receivedAt", "updatedAt"], {

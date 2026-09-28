@@ -41,6 +41,8 @@ The Blueprint generates `ADMIN_TOKEN` and `EVIDENCE_SIGNING_SECRET`. Do not copy
 
 Both public ingest and operator routes use Redis-backed distributed limits. `INGEST_RATE_LIMIT_PER_MINUTE` applies per endpoint key; `OPERATOR_RATE_LIMIT_PER_MINUTE` applies at the HTTP boundary before protected routes reach Postgres.
 
+`SIGNATURE_TOLERANCE_SECONDS` controls the allowed Stripe webhook timestamp skew and defaults to 300 seconds. Keep host time synchronized; do not increase this window merely to work around clock drift.
+
 ## Production upgrade
 
 For continuous delivery processing, move the queue consumer and reconciler out of the web service:

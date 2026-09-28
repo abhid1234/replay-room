@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
@@ -6,7 +7,7 @@ import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
-import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
+import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
@@ -72,6 +73,21 @@ describe("security helpers", () => {
     expect(redactHeaders({ authorization: "Bearer private", "x-event-id": "evt_1" })).toEqual({ authorization: "[REDACTED]", "x-event-id": "evt_1" });
     expect(sha256("same")).toBe(sha256("same"));
   });
+  it("verifies GitHub and timestamp-bound Stripe signature profiles", () => {
+    const secret = "provider-signing-secret";
+    const body = "{\"type\":\"payment.captured\"}";
+    const now = Date.parse("2026-09-27T12:00:00.000Z");
+    const timestamp = Math.floor(now / 1_000);
+    const stripeDigest = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+
+    expect(verifyWebhookSignature("github", secret, body, { "x-hub-signature-256": signPayload(secret, body) })).toBe(true);
+    expect(verifyWebhookSignature("stripe", secret, body, { "stripe-signature": `t=${timestamp},v1=${stripeDigest}` }, 300, now)).toBe(true);
+    expect(verifyWebhookSignature("stripe", secret, body, { "stripe-signature": `t=${timestamp - 301},v1=${stripeDigest}` }, 300, now)).toBe(false);
+    expect(redactHeaders({ "stripe-signature": "t=secret", "x-hub-signature-256": "sha256=secret" })).toEqual({
+      "stripe-signature": "[REDACTED]",
+      "x-hub-signature-256": "[REDACTED]",
+    });
+  });
   it("blocks private production targets", () => {
     expect(() => assertSafeDestination("http://127.0.0.1:4000", false)).toThrow("Private-network");
     expect(() => assertSafeDestination("https://[::1]/hook", false)).toThrow("Private-network");
@@ -102,6 +118,7 @@ describe("incident diagnosis", () => {
         ingestKey: "hook_test_123456",
         destinationUrl: "https://example.com/hook",
         signingSecret: null,
+        signatureProfile: "none",
         maxAttempts: 5,
         createdAt: event.receivedAt,
       },
@@ -132,7 +149,7 @@ describe("component heartbeats", () => {
 
 describe("incident evidence", () => {
   it("detects any change to an exported incident bundle", () => {
-    const detail = {
+    const detail: EventDetail = {
       ...event,
       endpoint: {
         id: event.endpointId,
@@ -140,6 +157,7 @@ describe("incident evidence", () => {
         ingestKey: "hook_test_123456",
         destinationUrl: "https://example.com/hook",
         signingSecret: "never-export-this-secret",
+        signatureProfile: "generic",
         maxAttempts: 5,
         createdAt: event.receivedAt,
       },
@@ -193,6 +211,7 @@ function detailWithAttempts(attempts: EventDetail["attempts"], idempotencyKey: s
       ingestKey: "hook_test_123456",
       destinationUrl: rehearsal.destinationUrl,
       signingSecret: null,
+      signatureProfile: "none",
       maxAttempts: 5,
       createdAt: event.receivedAt,
     },

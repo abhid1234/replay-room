@@ -6,6 +6,7 @@ export type EventStatus =
   | "dead_letter";
 
 export type DeliveryMode = "live" | "rehearsal" | "replay";
+export type SignatureProfile = "none" | "generic" | "github" | "stripe";
 
 export type DeliveryIntentState = "pending" | "dispatched" | "processing" | "completed";
 
@@ -35,6 +36,7 @@ export interface Endpoint {
   ingestKey: string;
   destinationUrl: string;
   signingSecret: string | null;
+  signatureProfile: SignatureProfile;
   maxAttempts: number;
   createdAt: string;
 }

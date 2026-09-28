@@ -6,7 +6,7 @@ import type { AuditEntry, DashboardStats, DeliveryAttempt, DeliveryIntent, Endpo
 export class FakeStore implements Store {
   endpoint: Endpoint = {
     id: randomUUID(), name: "Test", ingestKey: "hook_test_123456", destinationUrl: "https://example.com/hook",
-    signingSecret: null, maxAttempts: 3, createdAt: new Date().toISOString(),
+    signingSecret: null, signatureProfile: "none", maxAttempts: 3, createdAt: new Date().toISOString(),
   };
   events = new Map<string, WebhookEvent>();
   attempts: DeliveryAttempt[] = [];

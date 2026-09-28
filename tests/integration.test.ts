@@ -31,6 +31,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       ingestKey: `ci_${randomUUID()}`,
       destinationUrl: "https://example.com/webhooks",
       signingSecret: "integration-secret-value",
+      signatureProfile: "generic",
       maxAttempts: 4,
     });
     const input = {
@@ -109,6 +110,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       ingestKey: `intent_${randomUUID()}`,
       destinationUrl: "https://example.com/intents",
       signingSecret: null,
+      signatureProfile: "none",
       maxAttempts: 3,
     });
     const created = await store.createEvent({

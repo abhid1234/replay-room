@@ -13,6 +13,7 @@ This is a portfolio project built to exercise Render as a platform, not merely r
 Recent developer discussions keep converging on the same operational gap: receiving a webhook is easy; proving that a failed event is safe to replay is not. Basic inspectors can capture and resend. Replay Room adds the part an incident operator needs:
 
 - immutable receipt of the original event;
+- generic HMAC, GitHub, and timestamp-bound Stripe signature verification;
 - idempotency-aware ingestion;
 - async delivery with exponential backoff and jitter;
 - a dead-letter state with complete attempt history;
@@ -148,7 +149,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Payloads are capped at 256 KiB by default.
 - Per-endpoint ingest limits reject overload before database or queue writes.
 - Redis-backed operator limits reject abusive authenticated reads before database work.
-- Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
+- Endpoint-specific signature profiles support Replay Room HMAC (`x-replay-signature`), GitHub (`x-hub-signature-256`), and timestamp-bound Stripe signatures. Signature headers are redacted before storage.
 - Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.
 - Response bodies are truncated before storage.
