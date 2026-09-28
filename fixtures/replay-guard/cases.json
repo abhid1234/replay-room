@@ -1,0 +1,145 @@
+{
+  "event": {
+    "id": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+    "endpointId": "4efbceef-5f9c-4939-ad8f-ab5103074401",
+    "idempotencyKey": "guard-fixture-1",
+    "headers": {},
+    "payload": { "type": "payment.completed" },
+    "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "status": "dead_letter",
+    "attemptCount": 3,
+    "lastError": "Receiver returned HTTP 503",
+    "receivedAt": "2026-09-27T17:00:00.000Z",
+    "updatedAt": "2026-09-27T17:05:00.000Z"
+  },
+  "cases": [
+    {
+      "id": "exact-rehearsal-allows-replay",
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": { "allowed": true, "reasons": [] }
+    },
+    {
+      "id": "missing-rehearsal-blocks",
+      "rehearsal": null,
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": { "allowed": false, "reasons": ["Run a successful rehearsal before replaying"] }
+    },
+    {
+      "id": "destination-drift-blocks",
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://other.example/webhooks/payments"
+      },
+      "expected": { "allowed": false, "reasons": ["The destination changed after rehearsal"] }
+    },
+    {
+      "id": "weak-operator-context-blocks",
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "",
+        "reason": "retry",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": ["A replay reason of at least 10 characters is required", "An actor is required"]
+      }
+    },
+    {
+      "id": "payload-drift-blocks",
+      "rehearsal": {
+        "id": "f001b9a1-4f55-4433-a884-101c75f3f67f",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Rehearsed before the payload changed",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": { "allowed": false, "reasons": ["The payload changed after rehearsal"] }
+    },
+    {
+      "id": "failed-rehearsal-blocks",
+      "rehearsal": {
+        "id": "2d65530e-97c7-49ed-ad9f-7dd41f0fe078",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": false,
+        "statusCode": 503,
+        "notes": "Receiver still unavailable",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": { "allowed": false, "reasons": ["The latest rehearsal did not pass"] }
+    },
+    {
+      "id": "non-dead-letter-blocks",
+      "eventPatch": { "status": "delivered" },
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "fixture-operator",
+        "reason": "Receiver repair verified in rehearsal",
+        "destinationUrl": "https://receiver.example/webhooks/payments"
+      },
+      "expected": { "allowed": false, "reasons": ["Only dead-letter events can be replayed"] }
+    }
+  ]
+}

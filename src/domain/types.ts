@@ -6,6 +6,29 @@ export type EventStatus =
   | "dead_letter";
 
 export type DeliveryMode = "live" | "rehearsal" | "replay";
+export type SignatureProfile = "none" | "generic" | "github" | "stripe";
+
+export type DeliveryIntentState = "pending" | "dispatched" | "processing" | "completed";
+
+export interface DeliveryIntent {
+  id: string;
+  jobKey: string;
+  eventId: string;
+  job: import("./contracts.js").DeliveryJob;
+  state: DeliveryIntentState;
+  availableAt: string;
+  dispatchedAt: string | null;
+  processingAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface DeliveryIntentStats {
+  pending: number;
+  dispatched: number;
+  processing: number;
+  stale: number;
+}
 
 export interface Endpoint {
   id: string;
@@ -13,6 +36,7 @@ export interface Endpoint {
   ingestKey: string;
   destinationUrl: string;
   signingSecret: string | null;
+  signatureProfile: SignatureProfile;
   maxAttempts: number;
   createdAt: string;
 }
@@ -78,4 +102,28 @@ export interface DashboardStats {
   retrying: number;
   deadLetter: number;
   deliveryRate: number;
+}
+
+export interface EndpointReliability {
+  endpointId: string;
+  name: string;
+  destinationUrl: string;
+  windowHours: number;
+  total: number;
+  delivered: number;
+  retrying: number;
+  deadLetter: number;
+  deliveryRate: number;
+  p95LatencyMs: number | null;
+  lastEventAt: string | null;
+  state: "healthy" | "at_risk" | "breached" | "idle";
+}
+
+export interface IncidentDiagnosis {
+  code: "nominal" | "queued" | "in_flight" | "transient" | "receiver_outage" | "rate_limited" | "contract_rejection" | "network_failure" | "attempts_exhausted";
+  severity: "info" | "warning" | "critical";
+  headline: string;
+  summary: string;
+  evidence: string[];
+  nextAction: string;
 }

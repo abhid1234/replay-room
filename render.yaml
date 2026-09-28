@@ -5,13 +5,13 @@ previews:
 services:
   - type: web
     name: replay-room-api
+    plan: free
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: node dist/api/server.js
     healthCheckPath: /health
     autoDeployTrigger: checksPass
-    preDeployCommand: node dist/db/migrate.js
     envVars: &app-env
       - key: DATABASE_URL
         fromDatabase:
@@ -24,32 +24,26 @@ services:
           property: connectionString
       - key: ADMIN_TOKEN
         generateValue: true
+      - key: EVIDENCE_SIGNING_SECRET
+        generateValue: true
       - key: WEB_ORIGIN
         sync: false
       - key: ALLOW_PRIVATE_TARGETS
         value: "false"
       - key: MAX_PAYLOAD_BYTES
         value: "262144"
+      - key: INGEST_RATE_LIMIT_PER_MINUTE
+        value: "600"
+      - key: OPERATOR_RATE_LIMIT_PER_MINUTE
+        value: "300"
+      - key: SIGNATURE_TOLERANCE_SECONDS
+        value: "300"
       - key: RETENTION_DAYS
         value: "30"
-
-  - type: worker
-    name: replay-room-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/worker.js
-    autoDeployTrigger: checksPass
-    envVars: *app-env
-
-  - type: cron
-    name: replay-room-reconciler
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/cron.js
-    schedule: "*/10 * * * *"
-    envVars: *app-env
+      - key: EMBEDDED_WORKER
+        value: "true"
+      - key: RECONCILE_INTERVAL_SECONDS
+        value: "600"
 
   - type: web
     name: replay-room-web

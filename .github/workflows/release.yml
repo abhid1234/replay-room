@@ -1,0 +1,116 @@
+name: Prepare and optionally publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version to prepare
+        required: true
+        type: string
+      publish_npm:
+        description: Publish through the protected npm-publish environment
+        required: true
+        default: false
+        type: boolean
+      create_github_release:
+        description: Create the matching GitHub release after verification
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+      integrity: ${{ steps.pack.outputs.integrity }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - name: Verify requested version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: node -e "const p=require('./package.json');if(p.version!==process.env.REQUESTED_VERSION)throw new Error('requested version does not match package.json')"
+      - name: Build package and SBOM
+        id: pack
+        run: |
+          PACK_RESULT=$(npm pack --ignore-scripts --json)
+          TARBALL=$(node -e "process.stdout.write(JSON.parse(process.argv[1])[0].filename)" "$PACK_RESULT")
+          INTEGRITY=$(node -e "process.stdout.write(JSON.parse(process.argv[1])[0].integrity)" "$PACK_RESULT")
+          test -n "$TARBALL"
+          test -f "$TARBALL"
+          test -n "$INTEGRITY"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "integrity=$INTEGRITY" >> "$GITHUB_OUTPUT"
+          npm sbom --sbom-format cyclonedx > sbom.cdx.json
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+      - uses: actions/attest-sbom@v3
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+          sbom-path: sbom.cdx.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: replay-room-${{ inputs.version }}
+          if-no-files-found: error
+          path: |
+            ${{ steps.pack.outputs.tarball }}
+            package.json
+            sbom.cdx.json
+
+  publish-npm:
+    if: ${{ inputs.publish_npm }}
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: replay-room-${{ inputs.version }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.5.1
+      - name: Check exact version in registry
+        id: registry
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          EXPECTED_INTEGRITY: ${{ needs.build.outputs.integrity }}
+        run: node scripts/check-registry-version.mjs
+      - name: Publish exact reviewed artifact
+        if: steps.registry.outputs.published != 'true'
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: npm publish "$TARBALL" --access public --provenance
+
+  github-release:
+    if: ${{ always() && inputs.create_github_release && needs.build.result == 'success' && (!inputs.publish_npm || needs.publish-npm.result == 'success') }}
+    needs: [build, publish-npm]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: replay-room-${{ inputs.version }}
+      - name: Create immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: gh release create "v$VERSION" "$TARBALL#npm package tarball" "sbom.cdx.json#CycloneDX SBOM" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes

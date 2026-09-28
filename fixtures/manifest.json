@@ -1,0 +1,46 @@
+{
+  "name": "Replay Room incident fixtures",
+  "version": "0.1.0",
+  "license": "MIT",
+  "synthetic": true,
+  "description": "Deterministic webhook incident scenarios for conformance and demonstrations. No production traffic or provider claims.",
+  "cases": [
+    {
+      "id": "payment-receiver-outage",
+      "file": "incidents/payment-receiver-outage.json",
+      "expectedDiagnosis": "receiver_outage",
+      "expectedRisk": "elevated"
+    },
+    {
+      "id": "provider-rate-limit",
+      "file": "incidents/provider-rate-limit.json",
+      "expectedDiagnosis": "rate_limited",
+      "expectedRisk": "elevated"
+    },
+    {
+      "id": "contract-rejection",
+      "file": "incidents/contract-rejection.json",
+      "expectedDiagnosis": "contract_rejection",
+      "expectedRisk": "low"
+    },
+    {
+      "id": "network-failure",
+      "file": "incidents/network-failure.json",
+      "expectedDiagnosis": "network_failure",
+      "expectedRisk": "high"
+    },
+    {
+      "id": "automatic-recovery",
+      "file": "incidents/automatic-recovery.json",
+      "expectedDiagnosis": "transient",
+      "expectedRisk": "elevated"
+    },
+    {
+      "id": "ambiguous-payment-without-idempotency",
+      "file": "incidents/ambiguous-payment-without-idempotency.json",
+      "expectedDiagnosis": "network_failure",
+      "expectedRisk": "high"
+    }
+  ],
+  "replayGuardFile": "replay-guard/cases.json"
+}

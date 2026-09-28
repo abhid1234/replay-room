@@ -1,5 +1,7 @@
 # Replay Room
 
+[![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
+
 **Rehearse a failed webhook before you replay it.**
 
 Replay Room is an operator console for the dangerous moment after an event lands in a dead-letter queue. It preserves the original payload, records every delivery attempt, requires a successful rehearsal against the exact destination and payload hash, and only then allows an audited replay.
@@ -11,42 +13,67 @@ This is a portfolio project built to exercise Render as a platform, not merely r
 Recent developer discussions keep converging on the same operational gap: receiving a webhook is easy; proving that a failed event is safe to replay is not. Basic inspectors can capture and resend. Replay Room adds the part an incident operator needs:
 
 - immutable receipt of the original event;
+- generic HMAC, GitHub, and timestamp-bound Stripe signature verification;
 - idempotency-aware ingestion;
 - async delivery with exponential backoff and jitter;
 - a dead-letter state with complete attempt history;
 - rehearsal against a controlled endpoint;
 - a replay guard that binds approval to the rehearsed payload hash and destination;
 - operator reason and append-only audit history;
-- scheduled reconciliation for stuck deliveries and events stranded between the database and queue.
+- a Postgres delivery-intent outbox that survives queue loss, suppresses duplicate replay approvals, and lets reconciliation reconstruct exact jobs.
 
-The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md).
+The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md). Provider setup and forwarding contracts are in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+## The incident flight recorder
+
+The public dashboard opens with an interactive outage drill that follows a payment event through the real lifecycle vocabulary: durable receipt, worker claim, receiver failure, retry exhaustion, rehearsal, replay guard, and production delivery. It is explicitly labeled as a simulation and requires an operator action to run.
+
+For live events, the API computes a deterministic diagnosis from the current state and attempt transcript. It distinguishes receiver outages, rate limiting, contract rejection, network failure, active recovery, and healthy delivery, then gives the operator evidence and a concrete next action. The rules are explainable and tested; no external model or hidden prompt decides whether a replay is safe.
+
+The authenticated console also reads a live runtime snapshot instead of presenting a decorative architecture diagram. Postgres and Key Value latency come from direct dependency checks, BullMQ reports waiting/active/delayed/failed job counts, the durable outbox exposes pending/dispatched/processing/stale intent pressure, and the background worker and cron reconciler publish expiring heartbeats. On Render, the panel includes the service, instance, and Git commit injected into the running API.
+
+Every incident can be downloaded as a signed evidence bundle. The JSON includes the original event identity and payload digest, diagnosis, full attempt transcript, rehearsal records, and audit history. A canonical HMAC-SHA256 seal detects any later modification. Endpoint signing secrets are never returned by the admin API or included in exports; the server reports only whether a secret is configured.
+
+Operators with access to the deployment's evidence key can verify an exported bundle offline:
+
+```bash
+EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npm run evidence:verify -- ./incident.evidence.json
+```
+
+The command prints machine-readable JSON and exits non-zero for a modified or malformed bundle.
+
+The same validator is available as the publish-ready `@avee1234/replay-room` package:
+
+```bash
+npx @avee1234/replay-room inspect ./incident.evidence.json
+EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npx @avee1234/replay-room verify ./incident.evidence.json
+```
+
+The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. Publication remains human-gated; this repository does not claim that the package is already on npm.
+
+The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
+
+Public ingest is protected by an atomic per-endpoint limit in Render Key Value. The default allows 600 requests per minute, works across horizontally scaled API instances, and returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers. Redis stores only a short hash of the ingest key, not the key itself.
 
 ## Render architecture
 
-```mermaid
-flowchart LR
-  Provider[Webhook provider] -->|POST /ingest/:key| API[Render web service\nFastify API]
-  Dashboard[Render static site\nReact console] --> API
-  API --> PG[(Render Postgres\nimmutable event ledger)]
-  API --> KV[(Render Key Value\nBullMQ queue)]
-  KV --> Worker[Render background worker\ndelivery + rehearsal]
-  Worker --> Target[Customer destination]
-  Worker --> PG
-  Cron[Render cron job\nreconcile + retention] --> PG
-  Cron --> KV
-```
+The default Blueprint is intentionally deployable on Render's free compute plans. The API process embeds the BullMQ worker and ten-minute reconciler so the lab does not quietly create paid background-worker or cron resources.
 
-The root [render.yaml](render.yaml) creates the entire topology as one Blueprint:
+![Replay Room architecture: free Render lab, portable evidence, and production upgrade](diagrams/replay-room-render-architecture.svg)
+
+The diagram is available as [Mermaid source](diagrams/replay-room-render-architecture.mmd), an [editable Excalidraw scene](diagrams/replay-room-render-architecture.excalidraw), SVG, and PNG.
+
+The root [render.yaml](render.yaml) creates the free lab topology as one Blueprint:
 
 | Render primitive | Replay Room responsibility |
 |---|---|
 | Static site | Operator dashboard |
-| Web service | Public ingest and admin API |
-| Background worker | Delivery, retry, rehearsal, and replay |
-| Postgres | Durable event, attempt, rehearsal, and audit ledger |
-| Key Value | BullMQ work queue and delayed retries |
-| Cron job | Stuck-delivery reconciliation and retention |
+| Free web service | Public ingest, admin API, queue consumer, and reconciliation loop |
+| Postgres | Durable event, delivery-intent, attempt, rehearsal, and audit ledger |
+| Key Value | Disposable BullMQ transport, delayed retries, heartbeats, and rate limits |
 | Preview environment | Disposable full-stack environment for PR testing |
+
+The free topology is honest about its constraints: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
 
 ## The guarded replay invariant
 
@@ -57,8 +84,9 @@ A replay is accepted only when all of these are true:
 3. The latest rehearsal succeeded.
 4. The event payload hash still matches the rehearsed hash.
 5. The production replay destination exactly matches the rehearsed destination.
+6. If prior receiver acceptance is ambiguous or no idempotency key exists, the operator explicitly acknowledges the duplicate-side-effect risk.
 
-Every approval and rejection is written to the audit log. The guard is deterministic and covered by unit tests.
+Every approval and rejection records the risk level and acknowledgement in the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
 ## Quick start
 
@@ -100,11 +128,15 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Database-backed health check |
+| `GET` | `/openapi.json` | Versioned OpenAPI 3.1 contract |
 | `POST` | `/ingest/:ingestKey` | Accept and deduplicate an event |
 | `GET` | `/api/stats` | Dashboard status counts |
+| `GET` | `/api/system` | Dependency latency, queue pressure, service heartbeats, and deploy identity |
 | `GET/POST` | `/api/endpoints` | List or create ingest endpoints |
+| `GET` | `/api/endpoints/reliability` | Per-destination volume, delivery rate, recovery state, and p95 latency |
 | `GET` | `/api/events` | List recent events |
 | `GET` | `/api/events/:id` | Event, attempts, rehearsals, and audit trail |
+| `GET` | `/api/events/:id/evidence` | Download the HMAC-sealed incident evidence bundle |
 | `POST` | `/api/events/:id/rehearse` | Queue a safe rehearsal |
 | `POST` | `/api/events/:id/replay` | Run the replay guard and queue an approved replay |
 
@@ -113,14 +145,19 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 ## Security boundaries
 
 - Sensitive request headers are redacted before storage.
+- Endpoint signing secrets remain server-side and are redacted from every API response and evidence export.
 - Payloads are capped at 256 KiB by default.
-- Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
-- Private, loopback, credential-bearing, and non-HTTP destinations are blocked in production.
+- Per-endpoint ingest limits reject overload before database or queue writes.
+- Redis-backed operator limits reject abusive authenticated reads before database work.
+- Endpoint-specific signature profiles support Replay Room HMAC (`x-replay-signature`), GitHub (`x-hub-signature-256`), and timestamp-bound Stripe signatures. Signature headers are redacted before storage.
+- Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.
 - Response bodies are truncated before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
+- Postgres-backed delivery-intent claims suppress duplicate queue execution and preserve exact replay metadata through Key Value loss.
+- Incident exports use a separately generated evidence-signing secret and disable response caching.
 
-This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, outbound DNS rebinding protection, rate limiting, and configurable retention by tenant.
+This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, DNS pinning to remove the residual lookup-to-connect rebinding window, and configurable retention by tenant.
 
 ## Verification
 
@@ -128,14 +165,16 @@ This is an early-stage project. Production hardening would add organization-scop
 npm run verify
 ```
 
-The verification gate type-checks the API/worker/cron code, runs domain and delivery tests, and builds the production API and dashboard bundles.
+The verification gate type-checks the API/worker/cron code, runs domain, API, delivery-intent race, queue-loss recovery, diagnosis, heartbeat, free-runtime, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
+
+GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs.
 
 ## Interview walkthrough
 
-1. Start with a webhook sent to the `retry` demo sink.
-2. Show the immediate `202` response while the worker owns delivery.
-3. Let retries exhaust into `dead_letter`.
-4. Open the complete attempt timeline.
+1. Run the public outage drill and narrate how each checkpoint maps to Render.
+2. Send a webhook to the `retry` demo sink and show the immediate `202` response.
+3. Let the worker exhaust retries into `dead_letter`.
+4. Open the flight-recorder diagnosis and complete attempt timeline.
 5. Rehearse against the accepting sink.
 6. Try to replay to a different destination and show the deterministic guard rejection.
 7. Replay to the rehearsed destination with an operator reason.
@@ -143,7 +182,7 @@ The verification gate type-checks the API/worker/cron code, runs domain and deli
 
 ## Status
 
-Version `0.1.0` is a production-shaped first implementation. It is ready for local verification and a first Render Blueprint deployment; it is not represented as a production-tested managed service.
+Version `0.1.0` is a production-shaped release candidate. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
 
 ## License
 

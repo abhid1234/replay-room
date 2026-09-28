@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-09-27T16:02:00.000Z",
+  "event": {
+    "id": "c766ba28-022a-4c06-9734-723d21c6b3e9",
+    "endpointId": "42fb25b0-eeba-4b59-a4ca-004a74030bfd",
+    "idempotencyKey": "invoice-retry-2",
+    "headers": { "content-type": "application/json" },
+    "payload": { "type": "invoice.paid", "invoiceId": "inv_fixture_2" },
+    "payloadSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "status": "retrying",
+    "attemptCount": 1,
+    "lastError": "Receiver returned HTTP 503",
+    "receivedAt": "2026-09-27T16:00:00.000Z",
+    "updatedAt": "2026-09-27T16:00:01.000Z",
+    "endpoint": {
+      "id": "42fb25b0-eeba-4b59-a4ca-004a74030bfd",
+      "name": "Synthetic billing receiver",
+      "ingestKey": "fixture_retry_key",
+      "destinationUrl": "https://receiver.example/webhooks/invoices",
+      "signingSecret": null,
+      "maxAttempts": 4,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "d9178a16-10a0-4f3d-8a06-73e49f1fd805",
+        "eventId": "c766ba28-022a-4c06-9734-723d21c6b3e9",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/invoices",
+        "statusCode": 503,
+        "responseBody": "temporarily unavailable",
+        "error": null,
+        "durationMs": 77,
+        "createdAt": "2026-09-27T16:00:01.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": []
+  }
+}

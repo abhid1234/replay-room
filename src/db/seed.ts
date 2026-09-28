@@ -13,6 +13,7 @@ try {
       ingestKey: `demo_${randomBytes(8).toString("hex")}`,
       destinationUrl: "https://httpbin.org/status/200",
       signingSecret: null,
+      signatureProfile: "none",
       maxAttempts: 5,
     });
     console.log(`Seeded endpoint ${endpoint.name} with ingest key ${endpoint.ingestKey}`);

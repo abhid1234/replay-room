@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-09-27T14:10:00.000Z",
+  "event": {
+    "id": "64b376ee-326b-41cf-907f-f5c2e8fc2307",
+    "endpointId": "4f8d0d2a-5eaf-4fb5-87a8-bd4a919e7054",
+    "idempotencyKey": "customer-schema-4",
+    "headers": { "content-type": "application/json" },
+    "payload": { "type": "customer.updated", "customerId": "cus_fixture_4" },
+    "payloadSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "status": "dead_letter",
+    "attemptCount": 1,
+    "lastError": "Receiver returned HTTP 422",
+    "receivedAt": "2026-09-27T14:00:00.000Z",
+    "updatedAt": "2026-09-27T14:00:01.000Z",
+    "endpoint": {
+      "id": "4f8d0d2a-5eaf-4fb5-87a8-bd4a919e7054",
+      "name": "Synthetic CRM receiver",
+      "ingestKey": "fixture_contract_key",
+      "destinationUrl": "https://receiver.example/webhooks/customers",
+      "signingSecret": null,
+      "maxAttempts": 3,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "06763cf0-5471-4c11-8854-32950cd2bbfd",
+        "eventId": "64b376ee-326b-41cf-907f-f5c2e8fc2307",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/customers",
+        "statusCode": 422,
+        "responseBody": "schema mismatch",
+        "error": null,
+        "durationMs": 44,
+        "createdAt": "2026-09-27T14:00:01.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": []
+  }
+}

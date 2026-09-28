@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/abhid1234/replay-room/blob/main/schema/replay-room-evidence-v1.schema.json",
+  "title": "Replay Room Incident Evidence Bundle v1",
+  "description": "A portable, tamper-evident transcript of one webhook incident.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "event", "diagnosis", "replayRisk", "attempts", "rehearsals", "audit", "integrity"],
+  "properties": {
+    "schemaVersion": { "const": "replay-room.evidence/v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "endpointId", "endpointName", "idempotencyKey", "headers", "payload", "payloadSha256", "status", "attemptCount", "lastError", "receivedAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "endpointId": { "type": "string", "format": "uuid" },
+        "endpointName": { "type": "string", "minLength": 1 },
+        "idempotencyKey": { "type": ["string", "null"] },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "payload": true,
+        "payloadSha256": { "$ref": "#/$defs/sha256" },
+        "status": { "enum": ["queued", "delivering", "retrying", "delivered", "dead_letter"] },
+        "attemptCount": { "type": "integer", "minimum": 0 },
+        "lastError": { "type": ["string", "null"] },
+        "receivedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "headline", "summary", "evidence", "nextAction"],
+      "properties": {
+        "code": { "enum": ["nominal", "queued", "in_flight", "transient", "receiver_outage", "rate_limited", "contract_rejection", "network_failure", "attempts_exhausted"] },
+        "severity": { "enum": ["info", "warning", "critical"] },
+        "headline": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "nextAction": { "type": "string", "minLength": 1 }
+      }
+    },
+    "replayRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "requiresAcknowledgement", "headline", "summary", "signals"],
+      "properties": {
+        "level": { "enum": ["low", "elevated", "high"] },
+        "requiresAcknowledgement": { "type": "boolean" },
+        "headline": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "severity", "message"],
+            "properties": {
+              "code": { "enum": ["missing_idempotency_key", "ambiguous_network_outcome", "prior_success", "multiple_attempts", "transient_receiver_failure", "known_rejection"] },
+              "severity": { "enum": ["low", "elevated", "high"] },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } },
+    "rehearsals": { "type": "array", "items": { "$ref": "#/$defs/rehearsal" } },
+    "audit": { "type": "array", "items": { "$ref": "#/$defs/audit" } },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "contentSha256", "signature"],
+      "properties": {
+        "algorithm": { "const": "HMAC-SHA256" },
+        "contentSha256": { "$ref": "#/$defs/sha256" },
+        "signature": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "eventId", "mode", "destinationUrl", "statusCode", "responseBody", "error", "durationMs", "createdAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "eventId": { "type": "string", "format": "uuid" },
+        "mode": { "enum": ["live", "rehearsal", "replay"] },
+        "destinationUrl": { "type": "string", "format": "uri" },
+        "statusCode": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "responseBody": { "type": ["string", "null"] },
+        "error": { "type": ["string", "null"] },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "rehearsal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "eventId", "payloadSha256", "destinationUrl", "passed", "statusCode", "notes", "createdAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "eventId": { "type": "string", "format": "uuid" },
+        "payloadSha256": { "$ref": "#/$defs/sha256" },
+        "destinationUrl": { "type": "string", "format": "uri" },
+        "passed": { "type": "boolean" },
+        "statusCode": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "eventId", "action", "actor", "reason", "metadata", "createdAt"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "eventId": { "type": "string", "format": "uuid" },
+        "action": { "type": "string", "minLength": 1 },
+        "actor": { "type": "string", "minLength": 1 },
+        "reason": { "type": ["string", "null"] },
+        "metadata": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

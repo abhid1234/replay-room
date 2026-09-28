@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import type { CreateEventInput, CreateEventResult, Store } from "../domain/contracts.js";
+import type { CreateEventInput, CreateEventResult, DeliveryJob, Store } from "../domain/contracts.js";
+import { deliveryRate, reliabilityState } from "../domain/reliability.js";
 import type {
   AuditEntry,
   DashboardStats,
   DeliveryAttempt,
+  DeliveryIntent,
+  DeliveryIntentStats,
   Endpoint,
+  EndpointReliability,
   EventDetail,
   Rehearsal,
   WebhookEvent,
@@ -32,9 +36,9 @@ export class PostgresStore implements Store {
 
   async createEndpoint(input: Omit<Endpoint, "id" | "createdAt">): Promise<Endpoint> {
     const result = await this.pool.query(
-      `INSERT INTO endpoints (name, ingest_key, destination_url, signing_secret, max_attempts)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [input.name, input.ingestKey, input.destinationUrl, input.signingSecret, input.maxAttempts],
+      `INSERT INTO endpoints (name, ingest_key, destination_url, signing_secret, signature_profile, max_attempts)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [input.name, input.ingestKey, input.destinationUrl, input.signingSecret, input.signatureProfile, input.maxAttempts],
     );
     return mapEndpoint(result.rows[0] as Row);
   }
@@ -47,6 +51,63 @@ export class PostgresStore implements Store {
   async listEndpoints(): Promise<Endpoint[]> {
     const result = await this.pool.query("SELECT * FROM endpoints ORDER BY created_at DESC");
     return result.rows.map((row) => mapEndpoint(row as Row));
+  }
+
+  async endpointReliability(windowHours: number): Promise<EndpointReliability[]> {
+    const result = await this.pool.query(
+      `WITH event_rollup AS (
+         SELECT endpoint_id,
+           count(*)::int AS total,
+           count(*) FILTER (WHERE status = 'delivered')::int AS delivered,
+           count(*) FILTER (WHERE status = 'retrying')::int AS retrying,
+           count(*) FILTER (WHERE status = 'dead_letter')::int AS dead_letter,
+           max(received_at) AS last_event_at
+         FROM webhook_events
+         WHERE received_at >= now() - ($1::int * interval '1 hour')
+         GROUP BY endpoint_id
+       ), latency_rollup AS (
+         SELECT events.endpoint_id,
+           round(percentile_cont(0.95) WITHIN GROUP (ORDER BY attempts.duration_ms))::int AS p95_latency_ms
+         FROM delivery_attempts attempts
+         JOIN webhook_events events ON events.id = attempts.event_id
+         WHERE events.received_at >= now() - ($1::int * interval '1 hour')
+           AND attempts.mode <> 'rehearsal'
+           AND attempts.status_code BETWEEN 200 AND 299
+         GROUP BY events.endpoint_id
+       )
+       SELECT endpoints.id, endpoints.name, endpoints.destination_url,
+         coalesce(events.total, 0)::int AS total,
+         coalesce(events.delivered, 0)::int AS delivered,
+         coalesce(events.retrying, 0)::int AS retrying,
+         coalesce(events.dead_letter, 0)::int AS dead_letter,
+         events.last_event_at,
+         latency.p95_latency_ms
+       FROM endpoints
+       LEFT JOIN event_rollup events ON events.endpoint_id = endpoints.id
+       LEFT JOIN latency_rollup latency ON latency.endpoint_id = endpoints.id
+       ORDER BY events.last_event_at DESC NULLS LAST, endpoints.created_at DESC`,
+      [windowHours],
+    );
+    return result.rows.map((row) => {
+      const total = Number(row.total);
+      const delivered = Number(row.delivered);
+      const retrying = Number(row.retrying);
+      const deadLetter = Number(row.dead_letter);
+      return {
+        endpointId: String(row.id),
+        name: String(row.name),
+        destinationUrl: String(row.destination_url),
+        windowHours,
+        total,
+        delivered,
+        retrying,
+        deadLetter,
+        deliveryRate: deliveryRate(delivered, deadLetter),
+        p95LatencyMs: row.p95_latency_ms === null ? null : Number(row.p95_latency_ms),
+        lastEventAt: row.last_event_at === null ? null : iso(row.last_event_at),
+        state: reliabilityState(total, delivered, retrying, deadLetter),
+      };
+    });
   }
 
   async createEvent(input: CreateEventInput): Promise<CreateEventResult> {
@@ -155,6 +216,116 @@ export class PostgresStore implements Store {
     return mapAudit(result.rows[0] as Row);
   }
 
+  async createDeliveryIntent(
+    jobKey: string,
+    job: DeliveryJob,
+    availableAt = new Date().toISOString(),
+  ): Promise<{ intent: DeliveryIntent; created: boolean }> {
+    const intentId = randomUUID();
+    const enrichedJob = { ...job, intentId };
+    const inserted = await this.pool.query(
+      `INSERT INTO delivery_intents (id, job_key, event_id, job, available_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5)
+       ON CONFLICT (job_key) DO NOTHING
+       RETURNING *`,
+      [intentId, jobKey, job.eventId, JSON.stringify(enrichedJob), availableAt],
+    );
+    if (inserted.rowCount) {
+      return { intent: mapDeliveryIntent(inserted.rows[0] as Row), created: true };
+    }
+
+    const existing = await this.pool.query("SELECT * FROM delivery_intents WHERE job_key = $1", [jobKey]);
+    return { intent: mapDeliveryIntent(existing.rows[0] as Row), created: false };
+  }
+
+  async listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit = 500): Promise<DeliveryIntent[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM delivery_intents
+       WHERE available_at <= $1
+         AND (state = 'pending'
+           OR (state = 'dispatched' AND dispatched_at < $2)
+           OR (state = 'processing' AND processing_at < $2))
+       ORDER BY available_at ASC, created_at ASC
+       LIMIT $3`,
+      [nowIso, staleBeforeIso, limit],
+    );
+    return result.rows.map((row) => mapDeliveryIntent(row as Row));
+  }
+
+  async prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'dispatched', dispatched_at = $2, processing_at = NULL
+       WHERE id = $1
+         AND (state = 'pending'
+           OR (state = 'dispatched' AND dispatched_at < $3)
+           OR (state = 'processing' AND processing_at < $3))`,
+      [id, dispatchedAt, staleBeforeIso],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async releaseDeliveryIntent(id: string, dispatchedAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'pending', dispatched_at = NULL
+       WHERE id = $1 AND state = 'dispatched' AND dispatched_at = $2`,
+      [id, dispatchedAt],
+    );
+  }
+
+  async claimDeliveryIntent(id: string, processingAt: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'processing', processing_at = $2
+       WHERE id = $1 AND state = 'dispatched'`,
+      [id, processingAt],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'dispatched', processing_at = NULL
+       WHERE id = $1 AND state = 'processing' AND processing_at = $2`,
+      [id, processingAt],
+    );
+  }
+
+  async completeDeliveryIntent(id: string, completedAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'completed', completed_at = $2
+       WHERE id = $1 AND state <> 'completed'`,
+      [id, completedAt],
+    );
+  }
+
+  async deliveryIntentStats(staleBeforeIso: string): Promise<DeliveryIntentStats> {
+    const result = await this.pool.query(
+      `SELECT
+         count(*) FILTER (WHERE state = 'pending')::int AS pending,
+         count(*) FILTER (WHERE state = 'dispatched')::int AS dispatched,
+         count(*) FILTER (WHERE state = 'processing')::int AS processing,
+         count(*) FILTER (WHERE
+           (state = 'pending' AND available_at < $1)
+           OR (state = 'dispatched' AND dispatched_at < $1)
+           OR (state = 'processing' AND processing_at < $1)
+         )::int AS stale
+       FROM delivery_intents
+       WHERE state <> 'completed'`,
+      [staleBeforeIso],
+    );
+    const row = result.rows[0] as Row;
+    return {
+      pending: Number(row.pending),
+      dispatched: Number(row.dispatched),
+      processing: Number(row.processing),
+      stale: Number(row.stale),
+    };
+  }
+
   async stats(): Promise<DashboardStats> {
     const result = await this.pool.query(
       `SELECT count(*)::int AS total,
@@ -175,19 +346,31 @@ export class PostgresStore implements Store {
     };
   }
 
-  async recoverPending(beforeIso: string): Promise<string[]> {
+  async recoverPending(beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>> {
     const recovered = await this.pool.query(
       `UPDATE webhook_events SET status='retrying', last_error='Reconciled after a stuck delivery', updated_at=now()
-       WHERE status='delivering' AND updated_at < $1 RETURNING id`,
+       WHERE status='delivering' AND updated_at < $1
+         AND NOT EXISTS (
+           SELECT 1 FROM delivery_intents intents
+           WHERE intents.event_id = webhook_events.id AND intents.state <> 'completed'
+         )
+       RETURNING id, attempt_count`,
       [beforeIso],
     );
     const pending = await this.pool.query(
-      `SELECT id FROM webhook_events
+      `SELECT id, attempt_count FROM webhook_events
        WHERE status IN ('queued', 'retrying') AND updated_at < $1
+         AND NOT EXISTS (
+           SELECT 1 FROM delivery_intents intents
+           WHERE intents.event_id = webhook_events.id AND intents.state <> 'completed'
+         )
        ORDER BY updated_at ASC LIMIT 500`,
       [beforeIso],
     );
-    return [...new Set([...recovered.rows, ...pending.rows].map((row) => String(row.id)))];
+    return [...new Map([...recovered.rows, ...pending.rows].map((row) => [String(row.id), {
+      eventId: String(row.id),
+      attemptCount: Number(row.attempt_count),
+    }])).values()];
   }
 
   async deleteOlderThan(beforeIso: string): Promise<number> {
@@ -204,6 +387,7 @@ function mapEndpoint(row: Row): Endpoint {
   return {
     id: String(row.id), name: String(row.name), ingestKey: String(row.ingest_key),
     destinationUrl: String(row.destination_url), signingSecret: row.signing_secret ? String(row.signing_secret) : null,
+    signatureProfile: row.signature_profile as Endpoint["signatureProfile"],
     maxAttempts: Number(row.max_attempts), createdAt: iso(row.created_at),
   };
 }
@@ -238,6 +422,21 @@ function mapAudit(row: Row): AuditEntry {
   return {
     id: String(row.id), eventId: String(row.event_id), action: String(row.action), actor: String(row.actor),
     reason: row.reason === null ? null : String(row.reason), metadata: row.metadata as Record<string, unknown>, createdAt: iso(row.created_at),
+  };
+}
+
+function mapDeliveryIntent(row: Row): DeliveryIntent {
+  return {
+    id: String(row.id),
+    jobKey: String(row.job_key),
+    eventId: String(row.event_id),
+    job: row.job as DeliveryJob,
+    state: row.state as DeliveryIntent["state"],
+    availableAt: iso(row.available_at),
+    dispatchedAt: row.dispatched_at === null ? null : iso(row.dispatched_at),
+    processingAt: row.processing_at === null ? null : iso(row.processing_at),
+    completedAt: row.completed_at === null ? null : iso(row.completed_at),
+    createdAt: iso(row.created_at),
   };
 }
 

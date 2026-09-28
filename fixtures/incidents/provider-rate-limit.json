@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-09-27T13:10:00.000Z",
+  "event": {
+    "id": "a4b9d0ae-c58e-40f8-9901-f69665cb7939",
+    "endpointId": "833e1245-bd68-4c43-8062-6c0bb83a3a22",
+    "idempotencyKey": "catalog-429",
+    "headers": { "content-type": "application/json" },
+    "payload": { "type": "catalog.updated", "itemId": "item_fixture_7" },
+    "payloadSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "status": "dead_letter",
+    "attemptCount": 2,
+    "lastError": "Receiver returned HTTP 429",
+    "receivedAt": "2026-09-27T13:00:00.000Z",
+    "updatedAt": "2026-09-27T13:05:00.000Z",
+    "endpoint": {
+      "id": "833e1245-bd68-4c43-8062-6c0bb83a3a22",
+      "name": "Synthetic catalog receiver",
+      "ingestKey": "fixture_rate_limit_key",
+      "destinationUrl": "https://receiver.example/webhooks/catalog",
+      "signingSecret": null,
+      "maxAttempts": 2,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "be9d63d0-ec6c-493d-8698-459b6a5a8683",
+        "eventId": "a4b9d0ae-c58e-40f8-9901-f69665cb7939",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/catalog",
+        "statusCode": 429,
+        "responseBody": "retry later",
+        "error": null,
+        "durationMs": 31,
+        "createdAt": "2026-09-27T13:00:01.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": []
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-09-27T12:10:00.000Z",
+  "event": {
+    "id": "d594eae1-47cc-40e7-9e88-34053893dca6",
+    "endpointId": "8d1f90bb-5bf2-43f7-b2d9-e014a4e1d7a8",
+    "idempotencyKey": "payment-1042",
+    "headers": {
+      "content-type": "application/json",
+      "x-provider": "synthetic-checkout"
+    },
+    "payload": {
+      "type": "payment.completed",
+      "paymentId": "pay_fixture_1042",
+      "amount": 12900,
+      "currency": "USD"
+    },
+    "payloadSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "dead_letter",
+    "attemptCount": 3,
+    "lastError": "Receiver returned HTTP 503",
+    "receivedAt": "2026-09-27T12:00:00.000Z",
+    "updatedAt": "2026-09-27T12:06:00.000Z",
+    "endpoint": {
+      "id": "8d1f90bb-5bf2-43f7-b2d9-e014a4e1d7a8",
+      "name": "Synthetic payments receiver",
+      "ingestKey": "fixture_ingest_key_not_a_secret",
+      "destinationUrl": "https://receiver.example/webhooks/payments",
+      "signingSecret": null,
+      "maxAttempts": 3,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "5ea249fe-04a2-44a4-851c-a11a9a8b52c1",
+        "eventId": "d594eae1-47cc-40e7-9e88-34053893dca6",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "statusCode": 503,
+        "responseBody": "temporarily unavailable",
+        "error": null,
+        "durationMs": 184,
+        "createdAt": "2026-09-27T12:00:01.000Z"
+      },
+      {
+        "id": "be49c5e9-09bb-4fef-9e4b-8c9627cb56d0",
+        "eventId": "d594eae1-47cc-40e7-9e88-34053893dca6",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "statusCode": 502,
+        "responseBody": "bad gateway",
+        "error": null,
+        "durationMs": 121,
+        "createdAt": "2026-09-27T12:02:01.000Z"
+      },
+      {
+        "id": "4adb751c-c3cb-4bb8-ad1f-ab2439ac42e5",
+        "eventId": "d594eae1-47cc-40e7-9e88-34053893dca6",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "statusCode": 503,
+        "responseBody": "temporarily unavailable",
+        "error": null,
+        "durationMs": 205,
+        "createdAt": "2026-09-27T12:06:00.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": [
+      {
+        "id": "6bc21bfc-f6c2-44a4-80c6-a0de4ca72b3a",
+        "eventId": "d594eae1-47cc-40e7-9e88-34053893dca6",
+        "action": "event.received",
+        "actor": "ingest",
+        "reason": null,
+        "metadata": { "fixture": true },
+        "createdAt": "2026-09-27T12:00:00.000Z"
+      }
+    ]
+  }
+}
