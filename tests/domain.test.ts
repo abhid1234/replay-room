@@ -5,7 +5,7 @@ import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
-import { assertSafeDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
+import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
@@ -51,7 +51,21 @@ describe("security helpers", () => {
   });
   it("blocks private production targets", () => {
     expect(() => assertSafeDestination("http://127.0.0.1:4000", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[::1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[fd00::1]/hook", false)).toThrow("Private-network");
     expect(assertSafeDestination("https://example.com/hook", false).hostname).toBe("example.com");
+  });
+  it("blocks public hostnames that resolve into private networks", async () => {
+    await expect(assertSafeResolvedDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [{ address: "10.42.0.8", family: 4 }],
+    )).rejects.toThrow("private or reserved network");
+    await expect(assertSafeResolvedDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [{ address: "93.184.216.34", family: 4 }],
+    )).resolves.toMatchObject({ hostname: "hooks.example" });
   });
 });
 

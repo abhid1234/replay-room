@@ -30,6 +30,12 @@ After resolving a valid endpoint but before signature verification or database w
 
 The default window is 600 requests per minute per endpoint and is configurable with `INGEST_RATE_LIMIT_PER_MINUTE`. Rejected requests return HTTP 429 plus remaining-budget and retry timing headers; they never enter Postgres or BullMQ.
 
+## Outbound network boundary
+
+Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP protocols. Immediately before every live delivery, rehearsal, or replay, the worker resolves the hostname and rejects any answer in loopback, private, carrier-grade NAT, link-local, multicast, or reserved space. A security rejection is recorded as a terminal attempt and dead-lettered instead of entering a retry loop.
+
+This preflight materially reduces SSRF exposure but does not pin the subsequent connection to the inspected address. A hardened multi-tenant deployment should add a custom DNS-pinning HTTP dispatcher or an egress proxy to close that lookup-to-connect rebinding window.
+
 ## Rehearsal contract
 
 A rehearsal sends the original payload with `x-replay-room-mode: rehearsal` to an operator-selected endpoint. The evidence record binds:

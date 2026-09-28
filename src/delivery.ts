@@ -1,12 +1,13 @@
 import type { DeliveryJob, DeliveryQueue, DeliveryResult, Store } from "./domain/contracts.js";
 import { isRetryableStatus, retryDelayMs } from "./domain/retry.js";
-import { assertSafeDestination } from "./domain/security.js";
+import { assertSafeResolvedDestination, type DestinationLookup, UnsafeDestinationError } from "./domain/security.js";
 
 interface DeliveryDependencies {
   store: Store;
   queue: DeliveryQueue;
   allowPrivateTargets: boolean;
   fetchFn?: typeof fetch;
+  lookupFn?: DestinationLookup;
   now?: () => number;
 }
 
@@ -14,7 +15,8 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
   const detail = await deps.store.getEvent(job.eventId);
   if (!detail) throw new Error(`Event ${job.eventId} does not exist`);
 
-  const destination = assertSafeDestination(job.destinationUrl ?? detail.endpoint.destinationUrl, deps.allowPrivateTargets).toString();
+  const destinationInput = job.destinationUrl ?? detail.endpoint.destinationUrl;
+  let destination = safeDestinationLabel(destinationInput);
   const fetchFn = deps.fetchFn ?? fetch;
   const now = deps.now ?? Date.now;
   const nextAttempt = detail.attemptCount + 1;
@@ -27,8 +29,10 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
   let statusCode: number | null = null;
   let responseBody: string | null = null;
   let errorMessage: string | null = null;
+  let unsafeDestination = false;
 
   try {
+    destination = (await assertSafeResolvedDestination(destinationInput, deps.allowPrivateTargets, deps.lookupFn)).toString();
     const response = await fetchFn(destination, {
       method: "POST",
       headers: {
@@ -44,6 +48,7 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
     statusCode = response.status;
     responseBody = (await response.text()).slice(0, 4_096);
   } catch (error) {
+    unsafeDestination = error instanceof UnsafeDestinationError;
     errorMessage = error instanceof Error ? error.message : "Unknown delivery error";
   }
 
@@ -90,7 +95,7 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
     return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
   }
 
-  const retryable = statusCode === null || isRetryableStatus(statusCode);
+  const retryable = !unsafeDestination && (statusCode === null || isRetryableStatus(statusCode));
   const terminal = !retryable || nextAttempt >= detail.endpoint.maxAttempts;
   const lastError = errorMessage ?? `Destination returned HTTP ${statusCode}`;
   if (terminal) {
@@ -109,4 +114,15 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
   await deps.store.updateEvent(detail.id, { status: "retrying", lastError });
   await deps.queue.enqueue({ ...job, eventId: detail.id }, { delayMs });
   return { delivered: false, terminal: false, nextStatus: "retrying", retryDelayMs: delayMs };
+}
+
+function safeDestinationLabel(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  } catch {
+    return "[invalid destination]";
+  }
 }

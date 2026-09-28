@@ -7,7 +7,7 @@ import type { DeliveryQueue, Store } from "../domain/contracts.js";
 import { diagnoseEvent } from "../domain/diagnosis.js";
 import { createEvidenceBundle } from "../domain/evidence.js";
 import { evaluateReplay } from "../domain/replay-guard.js";
-import { assertSafeDestination, redactHeaders, sha256, verifySignature } from "../domain/security.js";
+import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifySignature } from "../domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
 import type { Endpoint } from "../domain/types.js";
 
@@ -247,6 +247,9 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof z.ZodError) {
       return reply.code(400).send({ error: "Invalid request", issues: error.issues });
+    }
+    if (error instanceof UnsafeDestinationError) {
+      return reply.code(400).send({ error: error.message });
     }
     request.log.error(error);
     return reply.code(500).send({ error: "Internal server error", requestId: request.id });

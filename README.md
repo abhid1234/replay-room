@@ -142,13 +142,13 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Payloads are capped at 256 KiB by default.
 - Per-endpoint ingest limits reject overload before database or queue writes.
 - Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
-- Private, loopback, credential-bearing, and non-HTTP destinations are blocked in production.
+- Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.
 - Response bodies are truncated before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
 - Incident exports use a separately generated evidence-signing secret and disable response caching.
 
-This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, outbound DNS rebinding protection, rate limiting, and configurable retention by tenant.
+This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, DNS pinning to remove the residual lookup-to-connect rebinding window, and configurable retention by tenant.
 
 ## Verification
 

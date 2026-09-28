@@ -120,7 +120,7 @@ describe("webhook API", () => {
   it("keeps admin data behind bearer authentication", async () => {
     const store = new FakeStore();
     store.endpoint.signingSecret = "webhook-secret-that-must-stay-server-side";
-    const app = await buildApp({ config, store, queue: new FakeQueue() });
+    const app = await buildApp({ config: { ...config, ALLOW_PRIVATE_TARGETS: false }, store, queue: new FakeQueue() });
     apps.push(app);
 
     const denied = await app.inject({ method: "GET", url: "/api/events" });
@@ -140,6 +140,15 @@ describe("webhook API", () => {
     });
     expect(endpoints.json()[0]).toMatchObject({ signingSecretConfigured: true });
     expect(endpoints.json()[0]).not.toHaveProperty("signingSecret");
+
+    const unsafeEndpoint = await app.inject({
+      method: "POST",
+      url: "/api/endpoints",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}`, "content-type": "application/json" },
+      payload: { name: "Unsafe", destinationUrl: "http://127.0.0.1/internal", maxAttempts: 3 },
+    });
+    expect(unsafeEndpoint.statusCode).toBe(400);
+    expect(unsafeEndpoint.json()).toEqual({ error: "Private-network destinations are disabled" });
   });
 
   it("reports the live service fabric without exposing it publicly", async () => {
