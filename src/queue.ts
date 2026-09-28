@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
-import type { DeliveryJob, DeliveryQueue } from "./domain/contracts.js";
+import type { DeliveryJob, DeliveryQueue, QueueHealth } from "./domain/contracts.js";
 
 export const DELIVERY_QUEUE = "replay-room-deliveries";
 
@@ -22,8 +22,38 @@ export class RedisDeliveryQueue implements DeliveryQueue {
     });
   }
 
+  async health(): Promise<QueueHealth> {
+    const startedAt = Date.now();
+    const [, counts, workerHeartbeat, cronHeartbeat] = await Promise.all([
+      this.connection.ping(),
+      this.queue.getJobCounts("waiting", "active", "delayed", "failed"),
+      this.connection.get(heartbeatKey("worker")),
+      this.connection.get(heartbeatKey("cron")),
+    ]);
+    return {
+      latencyMs: Date.now() - startedAt,
+      jobs: {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        delayed: counts.delayed ?? 0,
+        failed: counts.failed ?? 0,
+      },
+      workerHeartbeat,
+      cronHeartbeat,
+    };
+  }
+
+  async heartbeat(component: "worker" | "cron"): Promise<void> {
+    const ttlSeconds = component === "worker" ? 90 : 1_200;
+    await this.connection.set(heartbeatKey(component), new Date().toISOString(), "EX", ttlSeconds);
+  }
+
   async close(): Promise<void> {
     await this.queue.close();
     await this.connection.quit();
   }
+}
+
+function heartbeatKey(component: "worker" | "cron"): string {
+  return `replay-room:heartbeat:${component}`;
 }

@@ -13,6 +13,18 @@ type Event = {
 };
 type Stats = { total: number; queued: number; delivered: number; retrying: number; deadLetter: number; deliveryRate: number };
 type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; maxAttempts: number };
+type ComponentState = "online" | "degraded" | "waiting";
+type SystemSnapshot = {
+  observedAt: string;
+  deploy: { service: string; commit: string; instance: string; environment: string };
+  components: {
+    api: { state: ComponentState; uptimeSeconds: number };
+    database: { state: ComponentState; latencyMs: number };
+    queue: { state: ComponentState; latencyMs: number; jobs: { waiting: number; active: number; delayed: number; failed: number } };
+    worker: { state: ComponentState; heartbeatAgeSeconds: number | null };
+    cron: { state: ComponentState; heartbeatAgeSeconds: number | null };
+  };
+};
 type Detail = Event & {
   endpoint: Endpoint;
   attempts: Array<{ id: string; mode: string; statusCode: number | null; error: string | null; durationMs: number; createdAt: string }>;
@@ -35,6 +47,7 @@ export function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [system, setSystem] = useState<SystemSnapshot | null>(null);
   const [selected, setSelected] = useState<Detail | null>(null);
   const [message, setMessage] = useState("Enter the Render-generated admin token to open the console.");
   const [busy, setBusy] = useState(false);
@@ -54,10 +67,10 @@ export function App() {
     if (!token) return;
     if (!silent) setBusy(true);
     try {
-      const [nextStats, nextEvents, nextEndpoints] = await Promise.all([
-        request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"),
+      const [nextStats, nextEvents, nextEndpoints, nextSystem] = await Promise.all([
+        request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"), request<SystemSnapshot>("/api/system"),
       ]);
-      setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints);
+      setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setSystem(nextSystem);
       localStorage.setItem("replay-room-token", token);
       setMessage(`Connected to ${API_BASE}`);
     } catch (error) {
@@ -101,6 +114,23 @@ export function App() {
     setMessage("Guard approved the replay and queued it for delivery.");
   };
 
+  const downloadEvidence = async (event: Detail) => {
+    const response = await fetch(`${API_BASE}/api/events/${event.id}/evidence`, { headers: auth });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.error || `HTTP ${response.status}`);
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `replay-room-${event.id}.evidence.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setMessage("Signed incident evidence downloaded.");
+  };
+
   return (
     <main>
       <header className="masthead">
@@ -115,7 +145,7 @@ export function App() {
           <p className="lede">Replay Room explains how delivery failed, rehearses the exact recovery, and seals the evidence before anyone can replay production traffic.</p>
         </div>
         <div className="connection-panel">
-          <div className="connection-title"><span>Live stack</span><i className={token ? "online" : ""} /></div>
+          <div className="connection-title"><span>Live stack</span><i className={system ? "online" : ""} /></div>
           <label htmlFor="admin-token">Admin token</label>
           <input id="admin-token" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Render-generated secret" />
           <button onClick={() => void refresh()} disabled={busy}>{busy ? "Connecting..." : "Open console"}</button>
@@ -150,7 +180,7 @@ export function App() {
 
         <article className="panel detail-panel">
           <div className="panel-title"><span>Replay inspector</span><span className="mono">{selected?.id.slice(0, 12) ?? "NO EVENT"}</span></div>
-          {selected ? <EventInspector event={selected} onRehearse={rehearse} onReplay={replay} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
+          {selected ? <EventInspector event={selected} onRehearse={rehearse} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
         </article>
       </section>
 
@@ -163,11 +193,7 @@ export function App() {
             <button>Create ingest URL</button>
           </form>
         </article>
-        <article className="panel architecture">
-          <div className="panel-title">Render topology</div>
-          <div className="topology"><span>Static dashboard</span><b>→</b><span>API service</span><b>→</b><span>Key Value</span><b>→</b><span>Worker</span><b>→</b><span>Destination</span></div>
-          <p>Postgres is the durable ledger. A cron service reconciles stuck work and enforces retention. The whole stack is declared in one Blueprint.</p>
-        </article>
+        <RenderFabric system={system} />
       </section>
       <footer>{endpoints.length} endpoint{endpoints.length === 1 ? "" : "s"} configured · no replay without evidence</footer>
     </main>
@@ -178,10 +204,45 @@ function Stat({ label, value, accent, danger }: { label: string; value: string |
   return <div className={`stat ${accent ? "accent" : ""} ${danger ? "danger" : ""}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function EventInspector({ event, onRehearse, onReplay }: {
+function RenderFabric({ system }: { system: SystemSnapshot | null }) {
+  return <article className="panel fabric-panel" aria-live="polite">
+    <div className="panel-title"><span>Live Render fabric</span><span className="mono">{system?.deploy.commit ?? "not connected"}</span></div>
+    <div className="fabric-map">
+      <FabricNode name="API" kind="web service" state={system?.components.api.state ?? "waiting"} metric={system ? `${system.components.api.uptimeSeconds}s up` : "waiting"} />
+      <FabricNode name="Postgres" kind="durable ledger" state={system?.components.database.state ?? "waiting"} metric={system ? `${system.components.database.latencyMs}ms` : "waiting"} />
+      <FabricNode name="Key Value" kind="BullMQ transport" state={system?.components.queue.state ?? "waiting"} metric={system ? `${system.components.queue.latencyMs}ms` : "waiting"} />
+      <FabricNode name="Worker" kind="background service" state={system?.components.worker.state ?? "waiting"} metric={ageLabel(system?.components.worker.heartbeatAgeSeconds)} />
+      <FabricNode name="Reconciler" kind="cron service" state={system?.components.cron.state ?? "waiting"} metric={ageLabel(system?.components.cron.heartbeatAgeSeconds)} />
+    </div>
+    <dl className="queue-load">
+      <div><dt>Waiting</dt><dd>{system?.components.queue.jobs.waiting ?? "–"}</dd></div>
+      <div><dt>Active</dt><dd>{system?.components.queue.jobs.active ?? "–"}</dd></div>
+      <div><dt>Delayed</dt><dd>{system?.components.queue.jobs.delayed ?? "–"}</dd></div>
+      <div><dt>Failed</dt><dd>{system?.components.queue.jobs.failed ?? "–"}</dd></div>
+    </dl>
+    <p className="fabric-note">{system ? `${system.deploy.service} / ${system.deploy.instance} / observed ${new Date(system.observedAt).toLocaleTimeString()}` : "Connect the live stack to read dependency latency, queue pressure, and service heartbeats."}</p>
+  </article>;
+}
+
+function FabricNode({ name, kind, state = "waiting", metric }: { name: string; kind: string; state?: ComponentState; metric: string }) {
+  return <div className={`fabric-node ${state}`}>
+    <i />
+    <span><strong>{name}</strong><small>{kind}</small></span>
+    <b>{metric}</b>
+  </div>;
+}
+
+function ageLabel(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return "not seen";
+  if (seconds < 60) return `${seconds}s ago`;
+  return `${Math.round(seconds / 60)}m ago`;
+}
+
+function EventInspector({ event, onRehearse, onReplay, onDownload }: {
   event: Detail;
   onRehearse: (event: Detail, target: string) => Promise<void>;
   onReplay: (event: Detail, target: string, reason: string) => Promise<void>;
+  onDownload: (event: Detail) => Promise<void>;
 }) {
   const [target, setTarget] = useState(event.endpoint.destinationUrl);
   const [reason, setReason] = useState("Receiver fix verified; replay approved after rehearsal.");
@@ -192,6 +253,10 @@ function EventInspector({ event, onRehearse, onReplay }: {
       <p>{event.diagnosis.summary}</p>
       <ul>{event.diagnosis.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
       <small>{event.diagnosis.nextAction}</small>
+    </div>
+    <div className="evidence-strip">
+      <span><b>Signed evidence</b><small>Portable JSON with an HMAC integrity seal</small></span>
+      <button onClick={() => void onDownload(event)}>Download bundle</button>
     </div>
     <div className="guard-banner"><span>Replay guard</span><strong>{event.status === "dead_letter" ? "Waiting for rehearsal evidence" : "Replay locked"}</strong></div>
     <pre>{JSON.stringify(event.payload, null, 2)}</pre>

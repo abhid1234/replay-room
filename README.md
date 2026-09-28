@@ -27,6 +27,18 @@ The public dashboard opens with an interactive outage drill that follows a payme
 
 For live events, the API computes a deterministic diagnosis from the current state and attempt transcript. It distinguishes receiver outages, rate limiting, contract rejection, network failure, active recovery, and healthy delivery, then gives the operator evidence and a concrete next action. The rules are explainable and tested; no external model or hidden prompt decides whether a replay is safe.
 
+The authenticated console also reads a live runtime snapshot instead of presenting a decorative architecture diagram. Postgres and Key Value latency come from direct dependency checks, BullMQ reports waiting/active/delayed/failed job counts, and the background worker and cron reconciler publish expiring heartbeats. On Render, the panel includes the service, instance, and Git commit injected into the running API.
+
+Every incident can be downloaded as a signed evidence bundle. The JSON includes the original event identity and payload digest, diagnosis, full attempt transcript, rehearsal records, and audit history. A canonical HMAC-SHA256 seal detects any later modification. Endpoint signing secrets are never returned by the admin API or included in exports; the server reports only whether a secret is configured.
+
+Operators with access to the deployment's evidence key can verify an exported bundle offline:
+
+```bash
+EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npm run evidence:verify -- ./incident.evidence.json
+```
+
+The command prints machine-readable JSON and exits non-zero for a modified or malformed bundle.
+
 ## Render architecture
 
 ```mermaid
@@ -108,9 +120,11 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | `GET` | `/health` | Database-backed health check |
 | `POST` | `/ingest/:ingestKey` | Accept and deduplicate an event |
 | `GET` | `/api/stats` | Dashboard status counts |
+| `GET` | `/api/system` | Dependency latency, queue pressure, service heartbeats, and deploy identity |
 | `GET/POST` | `/api/endpoints` | List or create ingest endpoints |
 | `GET` | `/api/events` | List recent events |
 | `GET` | `/api/events/:id` | Event, attempts, rehearsals, and audit trail |
+| `GET` | `/api/events/:id/evidence` | Download the HMAC-sealed incident evidence bundle |
 | `POST` | `/api/events/:id/rehearse` | Queue a safe rehearsal |
 | `POST` | `/api/events/:id/replay` | Run the replay guard and queue an approved replay |
 
@@ -119,12 +133,14 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 ## Security boundaries
 
 - Sensitive request headers are redacted before storage.
+- Endpoint signing secrets remain server-side and are redacted from every API response and evidence export.
 - Payloads are capped at 256 KiB by default.
 - Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
 - Private, loopback, credential-bearing, and non-HTTP destinations are blocked in production.
 - Network calls time out after 10 seconds.
 - Response bodies are truncated before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
+- Incident exports use a separately generated evidence-signing secret and disable response caching.
 
 This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, outbound DNS rebinding protection, rate limiting, and configurable retention by tenant.
 
@@ -134,7 +150,7 @@ This is an early-stage project. Production hardening would add organization-scop
 npm run verify
 ```
 
-The verification gate type-checks the API/worker/cron code, runs domain and delivery tests, and builds the production API and dashboard bundles.
+The verification gate type-checks the API/worker/cron code, runs domain, API, delivery, diagnosis, and heartbeat tests, and builds the production API and dashboard bundles.
 
 ## Interview walkthrough
 

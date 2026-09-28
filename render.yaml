@@ -24,6 +24,8 @@ services:
           property: connectionString
       - key: ADMIN_TOKEN
         generateValue: true
+      - key: EVIDENCE_SIGNING_SECRET
+        generateValue: true
       - key: WEB_ORIGIN
         sync: false
       - key: ALLOW_PRIVATE_TARGETS

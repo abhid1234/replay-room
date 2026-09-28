@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
+import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
 import { assertSafeDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
+import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
 const event: WebhookEvent = {
@@ -76,5 +79,57 @@ describe("incident diagnosis", () => {
     expect(diagnosis.severity).toBe("critical");
     expect(diagnosis.evidence).toContain("HTTP sequence: 503 → 502");
     expect(diagnosis.nextAction).toContain("rehearse");
+  });
+});
+
+describe("component heartbeats", () => {
+  it("distinguishes fresh, stale, and not-yet-seen services", () => {
+    const now = Date.parse("2026-09-27T12:00:00.000Z");
+    expect(heartbeatState("2026-09-27T11:59:50.000Z", 45_000, now)).toBe("online");
+    expect(heartbeatState("2026-09-27T11:58:00.000Z", 45_000, now)).toBe("degraded");
+    expect(heartbeatState(null, 45_000, now)).toBe("waiting");
+    expect(heartbeatAgeSeconds("2026-09-27T11:59:50.000Z", now)).toBe(10);
+  });
+});
+
+describe("incident evidence", () => {
+  it("detects any change to an exported incident bundle", () => {
+    const detail = {
+      ...event,
+      endpoint: {
+        id: event.endpointId,
+        name: "Billing",
+        ingestKey: "hook_test_123456",
+        destinationUrl: "https://example.com/hook",
+        signingSecret: "never-export-this-secret",
+        maxAttempts: 5,
+        createdAt: event.receivedAt,
+      },
+      attempts: [],
+      rehearsals: [rehearsal],
+      audit: [],
+    };
+    const secret = "evidence-test-secret-with-at-least-32-characters";
+    const bundle = createEvidenceBundle(detail, secret, "2026-09-27T12:00:00.000Z");
+
+    expect(bundle.event.endpointName).toBe("Billing");
+    expect(JSON.stringify(bundle)).not.toContain("never-export-this-secret");
+    expect(verifyEvidenceBundle(bundle, secret)).toBe(true);
+
+    const tampered = structuredClone(bundle);
+    tampered.event.status = "delivered";
+    expect(verifyEvidenceBundle(tampered, secret)).toBe(false);
+  });
+});
+
+describe("production configuration", () => {
+  it("rejects the development evidence key in production", () => {
+    expect(() => loadConfig({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://user:pass@example.com/replay_room",
+      REDIS_URL: "redis://example.com:6379",
+      ADMIN_TOKEN: "production-admin-token",
+      EVIDENCE_SIGNING_SECRET: "development-only-evidence-secret-change-me",
+    })).toThrow("Production requires a unique evidence signing secret");
   });
 });

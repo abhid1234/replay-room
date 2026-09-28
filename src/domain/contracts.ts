@@ -54,7 +54,21 @@ export interface DeliveryJob {
 
 export interface DeliveryQueue {
   enqueue(job: DeliveryJob, options?: { delayMs?: number; jobId?: string }): Promise<void>;
+  health(): Promise<QueueHealth>;
+  heartbeat(component: "worker" | "cron"): Promise<void>;
   close(): Promise<void>;
+}
+
+export interface QueueHealth {
+  latencyMs: number;
+  jobs: {
+    waiting: number;
+    active: number;
+    delayed: number;
+    failed: number;
+  };
+  workerHeartbeat: string | null;
+  cronHeartbeat: string | null;
 }
 
 export interface DeliveryResult {

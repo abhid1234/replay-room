@@ -7,6 +7,8 @@ import { FakeStore } from "./fake-store.js";
 class FakeQueue implements DeliveryQueue {
   jobs: Array<{ job: DeliveryJob; delayMs: number }> = [];
   async enqueue(job: DeliveryJob, options: { delayMs?: number } = {}) { this.jobs.push({ job, delayMs: options.delayMs ?? 0 }); }
+  async health() { return { latencyMs: 0, jobs: { waiting: 0, active: 0, delayed: 0, failed: 0 }, workerHeartbeat: null, cronHeartbeat: null }; }
+  async heartbeat() {}
   async close() {}
 }
 

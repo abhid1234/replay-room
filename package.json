@@ -20,6 +20,7 @@
     "start:cron": "node dist/cron.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "evidence:verify": "tsx src/cli/verify-evidence.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

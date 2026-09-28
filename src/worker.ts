@@ -23,7 +23,19 @@ export async function startWorker(): Promise<void> {
   worker.on("completed", (job, result) => console.log(JSON.stringify({ event: "job.completed", jobId: job.id, result })));
   worker.on("failed", (job, error) => console.error(JSON.stringify({ event: "job.failed", jobId: job?.id, error: error.message })));
 
+  const publishHeartbeat = async () => {
+    try {
+      await queue.heartbeat("worker");
+    } catch (error) {
+      console.error(JSON.stringify({ event: "worker.heartbeat_failed", error: error instanceof Error ? error.message : "Unknown error" }));
+    }
+  };
+  await publishHeartbeat();
+  const heartbeatTimer = setInterval(() => void publishHeartbeat(), 15_000);
+  heartbeatTimer.unref();
+
   const close = async () => {
+    clearInterval(heartbeatTimer);
     await worker.close();
     await queue.close();
     await connection.quit();

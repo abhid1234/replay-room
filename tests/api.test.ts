@@ -11,6 +11,17 @@ class FakeQueue implements DeliveryQueue {
     this.jobs.push({ job, ...(options ? { options } : {}) });
   }
 
+  async health() {
+    return {
+      latencyMs: 2,
+      jobs: { waiting: this.jobs.length, active: 0, delayed: 0, failed: 0 },
+      workerHeartbeat: new Date().toISOString(),
+      cronHeartbeat: new Date().toISOString(),
+    };
+  }
+
+  async heartbeat() {}
+
   async close() {}
 }
 
@@ -20,6 +31,7 @@ const config: AppConfig = {
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
   REDIS_URL: "redis://localhost:6379",
   ADMIN_TOKEN: "test-admin-token",
+  EVIDENCE_SIGNING_SECRET: "test-evidence-secret-at-least-32-characters",
   WEB_ORIGIN: "http://localhost:5173",
   ALLOW_PRIVATE_TARGETS: true,
   MAX_PAYLOAD_BYTES: 262_144,
@@ -63,10 +75,27 @@ describe("webhook API", () => {
     });
     expect(detail.statusCode).toBe(200);
     expect(detail.json()).toMatchObject({ diagnosis: { code: "queued", severity: "info" } });
+    expect(detail.json().endpoint).toMatchObject({ signingSecretConfigured: false });
+    expect(detail.json().endpoint).not.toHaveProperty("signingSecret");
+
+    const evidence = await app.inject({
+      method: "GET",
+      url: `/api/events/${first.json<{ eventId: string }>().eventId}/evidence`,
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+    expect(evidence.statusCode).toBe(200);
+    expect(evidence.headers["cache-control"]).toBe("no-store");
+    expect(evidence.headers["content-disposition"]).toContain(".evidence.json");
+    expect(evidence.json()).toMatchObject({
+      schemaVersion: "replay-room.evidence/v1",
+      integrity: { algorithm: "HMAC-SHA256" },
+    });
   });
 
   it("keeps admin data behind bearer authentication", async () => {
-    const app = await buildApp({ config, store: new FakeStore(), queue: new FakeQueue() });
+    const store = new FakeStore();
+    store.endpoint.signingSecret = "webhook-secret-that-must-stay-server-side";
+    const app = await buildApp({ config, store, queue: new FakeQueue() });
     apps.push(app);
 
     const denied = await app.inject({ method: "GET", url: "/api/events" });
@@ -78,5 +107,41 @@ describe("webhook API", () => {
 
     expect(denied.statusCode).toBe(401);
     expect(allowed.statusCode).toBe(200);
+
+    const endpoints = await app.inject({
+      method: "GET",
+      url: "/api/endpoints",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+    expect(endpoints.json()[0]).toMatchObject({ signingSecretConfigured: true });
+    expect(endpoints.json()[0]).not.toHaveProperty("signingSecret");
+  });
+
+  it("reports the live service fabric without exposing it publicly", async () => {
+    const queue = new FakeQueue();
+    await queue.enqueue({ eventId: "e7c33ce4-1ed2-475b-8941-383b37ea4690", mode: "live" });
+    const app = await buildApp({ config, store: new FakeStore(), queue });
+    apps.push(app);
+
+    const denied = await app.inject({ method: "GET", url: "/api/system" });
+    const health = await app.inject({ method: "GET", url: "/health" });
+    const allowed = await app.inject({
+      method: "GET",
+      url: "/api/system",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+
+    expect(denied.statusCode).toBe(401);
+    expect(health.json()).toMatchObject({ status: "ok", dependencies: { queueLatencyMs: 2 } });
+    expect(allowed.json()).toMatchObject({
+      deploy: { service: "replay-room-api", environment: "test" },
+      components: {
+        api: { state: "online" },
+        database: { state: "online" },
+        queue: { state: "online", jobs: { waiting: 1 } },
+        worker: { state: "online" },
+        cron: { state: "online" },
+      },
+    });
   });
 });

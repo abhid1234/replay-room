@@ -5,8 +5,11 @@ import { z } from "zod";
 import type { AppConfig } from "../config.js";
 import type { DeliveryQueue, Store } from "../domain/contracts.js";
 import { diagnoseEvent } from "../domain/diagnosis.js";
+import { createEvidenceBundle } from "../domain/evidence.js";
 import { evaluateReplay } from "../domain/replay-guard.js";
 import { assertSafeDestination, redactHeaders, sha256, verifySignature } from "../domain/security.js";
+import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
+import type { Endpoint } from "../domain/types.js";
 
 interface Dependencies {
   config: AppConfig;
@@ -56,16 +59,56 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
 
   app.get("/health", async (_request, reply) => {
     try {
+      const databaseStartedAt = Date.now();
       await store.ping();
-      return { status: "ok", service: "replay-room-api", timestamp: new Date().toISOString() };
+      const databaseLatencyMs = Date.now() - databaseStartedAt;
+      const queueHealth = await queue.health();
+      return {
+        status: "ok",
+        service: "replay-room-api",
+        timestamp: new Date().toISOString(),
+        dependencies: { databaseLatencyMs, queueLatencyMs: queueHealth.latencyMs },
+      };
     } catch (error) {
       reply.code(503);
-      return { status: "degraded", error: error instanceof Error ? error.message : "Database unavailable" };
+      return { status: "degraded", error: error instanceof Error ? error.message : "Required dependency unavailable" };
     }
   });
 
   app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
-  app.get("/api/endpoints", { preHandler: adminGuard(config) }, async () => store.listEndpoints());
+  app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
+    const databaseStartedAt = Date.now();
+    await store.ping();
+    const databaseLatencyMs = Date.now() - databaseStartedAt;
+    const queueHealth = await queue.health();
+    const now = Date.now();
+    return {
+      observedAt: new Date(now).toISOString(),
+      deploy: {
+        service: process.env.RENDER_SERVICE_NAME ?? "replay-room-api",
+        commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
+        instance: process.env.RENDER_INSTANCE_ID ?? "local",
+        environment: config.NODE_ENV,
+      },
+      components: {
+        api: { state: "online", uptimeSeconds: Math.round(process.uptime()) },
+        database: { state: "online", latencyMs: databaseLatencyMs },
+        queue: { state: "online", latencyMs: queueHealth.latencyMs, jobs: queueHealth.jobs },
+        worker: {
+          state: heartbeatState(queueHealth.workerHeartbeat, 45_000, now),
+          heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.workerHeartbeat, now),
+        },
+        cron: {
+          state: heartbeatState(queueHealth.cronHeartbeat, 15 * 60_000, now),
+          heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.cronHeartbeat, now),
+        },
+      },
+    };
+  });
+  app.get("/api/endpoints", { preHandler: adminGuard(config) }, async () => {
+    const endpoints = await store.listEndpoints();
+    return endpoints.map(endpointView);
+  });
   app.post("/api/endpoints", { preHandler: adminGuard(config) }, async (request, reply) => {
     const input = endpointSchema.parse(request.body);
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
@@ -77,7 +120,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       maxAttempts: input.maxAttempts,
     });
     reply.code(201);
-    return endpoint;
+    return endpointView(endpoint);
   });
 
   app.get("/api/events", { preHandler: adminGuard(config) }, async (request) => {
@@ -89,7 +132,17 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
-    return { ...event, diagnosis: diagnoseEvent(event) };
+    return { ...event, endpoint: endpointView(event.endpoint), diagnosis: diagnoseEvent(event) };
+  });
+
+  app.get("/api/events/:id/evidence", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    const bundle = createEvidenceBundle(event, config.EVIDENCE_SIGNING_SECRET);
+    reply.header("cache-control", "no-store");
+    reply.header("content-disposition", `attachment; filename="replay-room-${id}.evidence.json"`);
+    return bundle;
   });
 
   app.post("/api/events/:id/rehearse", { preHandler: adminGuard(config) }, async (request, reply) => {
@@ -200,4 +253,9 @@ function actorFrom(headers: Record<string, unknown>): string {
 function stringHeader(value: unknown): string | null {
   if (Array.isArray(value)) return value[0] ? String(value[0]) : null;
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function endpointView(endpoint: Endpoint) {
+  const { signingSecret, ...safe } = endpoint;
+  return { ...safe, signingSecretConfigured: Boolean(signingSecret) };
 }

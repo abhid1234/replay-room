@@ -18,6 +18,7 @@ export async function reconcile(): Promise<void> {
 
     const retentionBefore = new Date(Date.now() - config.RETENTION_DAYS * 86_400_000).toISOString();
     const deleted = await store.deleteOlderThan(retentionBefore);
+    await queue.heartbeat("cron");
     console.log(JSON.stringify({ event: "reconcile.completed", recovered: eventIds.length, deleted, at: new Date().toISOString() }));
   } finally {
     await queue.close();
