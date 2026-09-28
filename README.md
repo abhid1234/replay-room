@@ -191,7 +191,7 @@ GitHub Actions runs the same gate on every branch push and pull request, exercis
 
 ## Status
 
-Version `0.1.1` is the current production-shaped release line. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
+Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
 
 ## License
 

@@ -9,7 +9,7 @@ AgentRoute is the benchmark for launch completeness: product, public proof, pack
 | GitHub | `abhid1234/replay-room` | Public repository with required verification workflows | `main` contains the release candidate and required checks pass |
 | Product site | Render static site | Blueprint-ready; public URL pending | Public landing page with architecture and links |
 | npm | `@avee1234/replay-room` library and CLI | Name unclaimed; package gate passes; not published | Provenance-bearing registry version and install smoke test |
-| Release | [v0.1.0](https://github.com/abhid1234/replay-room/releases/tag/v0.1.0) | Published from `7049351`; tarball and CycloneDX SBOM hashes match the release metadata; SLSA provenance and CycloneDX attestations verify | Public release, tarball, SBOM, and signed attestations |
+| Release | [v0.1.1](https://github.com/abhid1234/replay-room/releases/tag/v0.1.1) | Published from `90af27d`; tarball and CycloneDX SBOM hashes match the release metadata; SLSA provenance and CycloneDX attestations verify | Public release, tarball, SBOM, and signed attestations |
 | Fixtures | Synthetic incident corpus, conformance runner, and Hugging Face dataset bundle | Six incident/risk cases and seven replay-guard cases implemented; deterministic dataset card, JSONL configurations, hashes, and upload/readback procedure ready | Public dataset mirror with readback verification |
 | Schema | `replay-room.evidence/v1` Zod and JSON Schema contracts | Implemented | Valid, malformed, and tampered conformance cases |
 | Security | HMAC evidence, SSRF controls, redaction, CodeQL, dependency audit | Implemented with documented DNS TOCTOU limitation | Clean automated gates and release review |
