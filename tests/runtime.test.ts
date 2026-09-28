@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { reconcileOnce } from "../src/cron.js";
+import { deliveryJobKey, dispatchReadyIntents, scheduleDelivery } from "../src/dispatch.js";
 import type { DeliveryJob, DeliveryQueue } from "../src/domain/contracts.js";
 import { FakeStore } from "./fake-store.js";
 
 class RecordingQueue implements DeliveryQueue {
   readonly jobs: DeliveryJob[] = [];
   readonly heartbeats: string[] = [];
+  failNext = false;
 
-  async enqueue(job: DeliveryJob) { this.jobs.push(job); }
+  async enqueue(job: DeliveryJob) {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("simulated queue outage");
+    }
+    this.jobs.push(job);
+  }
   async health() {
     return {
       latencyMs: 0,
@@ -51,7 +59,7 @@ describe("free-tier runtime", () => {
     let retentionBefore = "";
     store.recoverPending = async (beforeIso) => {
       pendingBefore = beforeIso;
-      return ["event-a", "event-b"];
+      return [{ eventId: "event-a", attemptCount: 0 }, { eventId: "event-b", attemptCount: 2 }];
     };
     store.deleteOlderThan = async (beforeIso) => {
       retentionBefore = beforeIso;
@@ -65,13 +73,36 @@ describe("free-tier runtime", () => {
       now: new Date("2026-09-27T12:00:00.000Z"),
     });
 
-    expect(result).toEqual({ recovered: 2, deleted: 3 });
+    expect(result).toEqual({ recovered: 2, dispatched: 2, dispatchFailures: 0, deleted: 3 });
     expect(pendingBefore).toBe("2026-09-27T11:55:00.000Z");
     expect(retentionBefore).toBe("2026-08-28T12:00:00.000Z");
     expect(queue.jobs).toEqual([
-      { eventId: "event-a", mode: "live", reason: "reconciled-pending-delivery" },
-      { eventId: "event-b", mode: "live", reason: "reconciled-pending-delivery" },
+      expect.objectContaining({ eventId: "event-a", mode: "live", cycleId: "recovery-1", attemptNumber: 1, reason: "reconciled-pending-delivery" }),
+      expect.objectContaining({ eventId: "event-b", mode: "live", cycleId: "recovery-3", attemptNumber: 3, reason: "reconciled-pending-delivery" }),
     ]);
     expect(queue.heartbeats).toEqual(["cron"]);
+  });
+
+  it("leaves an intent pending through queue loss and dispatches it after recovery", async () => {
+    const store = new FakeStore();
+    const queue = new RecordingQueue();
+    const created = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: "queue-loss-1",
+      headers: {},
+      payload: { type: "invoice.paid" },
+      payloadSha256: "b".repeat(64),
+    });
+    const job = { eventId: created.event.id, mode: "live", cycleId: "live", attemptNumber: 1 } as const;
+    const now = new Date("2026-09-27T12:00:00.000Z");
+    queue.failNext = true;
+
+    await expect(scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job), now })).rejects.toThrow("simulated queue outage");
+    expect([...store.intents.values()][0]?.state).toBe("pending");
+
+    const recovered = await dispatchReadyIntents(store, queue, now);
+    expect(recovered).toEqual({ dispatched: 1, failed: 0 });
+    expect(queue.jobs).toHaveLength(1);
+    expect([...store.intents.values()][0]?.state).toBe("dispatched");
   });
 });

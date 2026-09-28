@@ -17,7 +17,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
     queue = new RedisDeliveryQueue(redisUrl);
     await migrate(databaseUrl);
     await migrate(databaseUrl);
-    await store.pool.query("TRUNCATE audit_log, rehearsals, delivery_attempts, webhook_events, endpoints CASCADE");
+    await store.pool.query("TRUNCATE delivery_intents, audit_log, rehearsals, delivery_attempts, webhook_events, endpoints CASCADE");
   });
 
   afterAll(async () => {
@@ -101,5 +101,33 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
     expect(second).toMatchObject({ allowed: true, remaining: 0 });
     expect(third).toMatchObject({ allowed: false, remaining: 0 });
     expect((await queue.health()).latencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("deduplicates, claims, and completes a durable delivery intent", async () => {
+    const endpoint = await store.createEndpoint({
+      name: "Intent receiver",
+      ingestKey: `intent_${randomUUID()}`,
+      destinationUrl: "https://example.com/intents",
+      signingSecret: null,
+      maxAttempts: 3,
+    });
+    const created = await store.createEvent({
+      endpointId: endpoint.id,
+      idempotencyKey: "intent-event-1",
+      headers: {},
+      payload: { type: "intent.test" },
+      payloadSha256: "c".repeat(64),
+    });
+    const job = { eventId: created.event.id, mode: "live" as const, cycleId: "live", attemptNumber: 1 };
+    const first = await store.createDeliveryIntent(`live-${created.event.id}-attempt-1`, job);
+    const duplicate = await store.createDeliveryIntent(`live-${created.event.id}-attempt-1`, job);
+
+    expect(first.created).toBe(true);
+    expect(duplicate).toMatchObject({ created: false, intent: { id: first.intent.id } });
+    expect(await store.prepareDeliveryIntentDispatch(first.intent.id, "2026-09-27T12:00:00.000Z", "2026-09-27T11:55:00.000Z")).toBe(true);
+    expect(await store.claimDeliveryIntent(first.intent.id, "2026-09-27T12:00:01.000Z")).toBe(true);
+    expect(await store.claimDeliveryIntent(first.intent.id, "2026-09-27T12:00:02.000Z")).toBe(false);
+    await store.completeDeliveryIntent(first.intent.id, "2026-09-27T12:00:03.000Z");
+    expect(await store.listDispatchableIntents("2026-09-27T13:00:00.000Z", "2026-09-27T12:55:00.000Z")).toEqual([]);
   });
 });

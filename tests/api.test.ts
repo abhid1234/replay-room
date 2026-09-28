@@ -186,6 +186,54 @@ describe("webhook API", () => {
     expect(unsafeEndpoint.json()).toEqual({ error: "Private-network destinations are disabled" });
   });
 
+  it("persists one replay intent and suppresses duplicate operator approvals", async () => {
+    const store = new FakeStore();
+    const queue = new FakeQueue();
+    const created = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: "failed-payment-42",
+      headers: {},
+      payload: { type: "payment.failed", paymentId: "pay_42" },
+      payloadSha256: "a".repeat(64),
+    });
+    await store.updateEvent(created.event.id, { status: "dead_letter", attemptCount: 3 });
+    const rehearsal = await store.addRehearsal({
+      eventId: created.event.id,
+      payloadSha256: "a".repeat(64),
+      destinationUrl: "https://example.com/hook",
+      passed: true,
+      statusCode: 202,
+      notes: "receiver repaired",
+    });
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+    const request = {
+      method: "POST" as const,
+      url: `/api/events/${created.event.id}/replay`,
+      headers: {
+        authorization: `Bearer ${config.ADMIN_TOKEN}`,
+        "content-type": "application/json",
+        "x-operator": "incident-commander",
+      },
+      payload: { destinationUrl: rehearsal.destinationUrl, reason: "Receiver repair verified in rehearsal" },
+    };
+
+    const first = await app.inject(request);
+    const second = await app.inject(request);
+
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(first.json().deliveryIntentId).toBe(second.json().deliveryIntentId);
+    expect(first.json()).toMatchObject({ duplicate: false });
+    expect(second.json()).toMatchObject({ duplicate: true });
+    expect(queue.jobs).toHaveLength(1);
+    expect(queue.jobs[0]).toMatchObject({
+      job: { mode: "replay", attemptNumber: 1, cycleId: `replay-${rehearsal.id}` },
+      options: { jobId: expect.stringContaining(`replay-${rehearsal.id}`) },
+    });
+    expect(store.audit.map((entry) => entry.action)).toEqual(["replay.approved", "replay.duplicate_suppressed"]);
+  });
+
   it("reports the live service fabric without exposing it publicly", async () => {
     const queue = new FakeQueue();
     await queue.enqueue({ eventId: "e7c33ce4-1ed2-475b-8941-383b37ea4690", mode: "live" });

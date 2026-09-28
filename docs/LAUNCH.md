@@ -50,7 +50,7 @@ This design also makes the limitations visible:
 - free Postgres expires after 30 days;
 - free Key Value is in-memory and can lose queued work on restart.
 
-Postgres is therefore the source of truth. The reconciler scans the ledger for old queued, retrying, or interrupted deliveries and reconstructs missing queue work. The free tier is not presented as production infrastructure; it is a concrete recovery test.
+Postgres is therefore the source of truth. Before a job reaches Key Value, Replay Room persists its exact delivery intent, stable queue key, retry ordinal, replay target, actor, and reason. The worker atomically claims that intent, so duplicate queue delivery cannot send it twice. The reconciler can later reconstruct pending or interrupted work from Postgres after queue loss. The free tier is not presented as production infrastructure; it is a concrete recovery test.
 
 The production upgrade separates the API, worker, and cron responsibilities, uses backed-up Postgres and persistent Key Value, and adds stronger tenant authentication, secret encryption, and egress enforcement.
 

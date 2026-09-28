@@ -13,3 +13,4 @@ All notable changes to Replay Room are documented here.
 - free Render lab Blueprint with embedded worker and reconciler;
 - Postgres and Redis integration CI, CodeQL, dependency audit, and container build;
 - synthetic conformance fixtures, JSON Schema, package-content checks, and an attested release workflow.
+- Postgres-backed delivery intents with queue-loss recovery, worker claims, stable job identities, duplicate replay suppression, and per-replay retry budgets.

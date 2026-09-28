@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { deliver } from "../src/delivery.js";
+import { deliveryJobKey, scheduleDelivery } from "../src/dispatch.js";
 import type { DeliveryJob, DeliveryQueue } from "../src/domain/contracts.js";
 import { sha256 } from "../src/domain/security.js";
 import { FakeStore } from "./fake-store.js";
 
 class FakeQueue implements DeliveryQueue {
-  jobs: Array<{ job: DeliveryJob; delayMs: number }> = [];
-  async enqueue(job: DeliveryJob, options: { delayMs?: number } = {}) { this.jobs.push({ job, delayMs: options.delayMs ?? 0 }); }
+  jobs: Array<{ job: DeliveryJob; delayMs: number; jobId?: string }> = [];
+  async enqueue(job: DeliveryJob, options: { delayMs?: number; jobId?: string } = {}) {
+    this.jobs.push({ job, delayMs: options.delayMs ?? 0, ...(options.jobId ? { jobId: options.jobId } : {}) });
+  }
   async health() { return { latencyMs: 0, jobs: { waiting: 0, active: 0, delayed: 0, failed: 0 }, workerHeartbeat: null, cronHeartbeat: null }; }
   async heartbeat() {}
   async consumeRateLimit(_key: string, limit: number, windowSeconds: number) { return { allowed: true, remaining: limit - 1, retryAfterSeconds: windowSeconds }; }
@@ -66,5 +69,40 @@ describe("delivery processor", () => {
     expect(result).toMatchObject({ terminal: true, nextStatus: "dead_letter" });
     expect(store.attempts[0]?.error).toContain("private or reserved network");
     expect((await store.getEvent(eventId))?.status).toBe("dead_letter");
+  });
+
+  it("claims a durable intent once so duplicate queue delivery cannot resend", async () => {
+    const { store, queue, eventId } = await setup();
+    const job = { eventId, mode: "live", cycleId: "live", attemptNumber: 1 } as const;
+    await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
+    const queued = queue.jobs[0]!.job;
+    const fetchFn = vi.fn(async () => new Response(null, { status: 204 }));
+
+    const first = await deliver(queued, { store, queue, allowPrivateTargets: false, fetchFn, lookupFn: publicLookup });
+    const duplicate = await deliver(queued, { store, queue, allowPrivateTargets: false, fetchFn, lookupFn: publicLookup });
+
+    expect(first.delivered).toBe(true);
+    expect(duplicate.delivered).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(store.intents.get(queued.intentId!)?.state).toBe("completed");
+  });
+
+  it("starts a fresh retry budget for a guarded replay and persists the next attempt", async () => {
+    const { store, queue, eventId } = await setup("dead_letter");
+    await store.updateEvent(eventId, { attemptCount: store.endpoint.maxAttempts });
+    const job = { eventId, mode: "replay", cycleId: "replay-rehearsal-1", attemptNumber: 1 } as const;
+    await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
+    const result = await deliver(queue.jobs[0]!.job, {
+      store,
+      queue,
+      allowPrivateTargets: false,
+      fetchFn: async () => new Response("temporarily unavailable", { status: 503 }),
+      lookupFn: publicLookup,
+    });
+
+    expect(result).toMatchObject({ terminal: false, nextStatus: "retrying" });
+    expect(queue.jobs.at(-1)?.job).toMatchObject({ mode: "replay", cycleId: "replay-rehearsal-1", attemptNumber: 2 });
+    expect(queue.jobs.at(-1)?.jobId).toContain("attempt-2");
+    expect([...store.intents.values()].map((intent) => intent.state).sort()).toEqual(["completed", "dispatched"]);
   });
 });

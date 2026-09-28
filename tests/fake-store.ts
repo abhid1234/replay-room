@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { CreateEventInput, CreateEventResult, Store } from "../src/domain/contracts.js";
+import type { CreateEventInput, CreateEventResult, DeliveryJob, Store } from "../src/domain/contracts.js";
 import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
-import type { AuditEntry, DashboardStats, DeliveryAttempt, Endpoint, EndpointReliability, EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
+import type { AuditEntry, DashboardStats, DeliveryAttempt, DeliveryIntent, Endpoint, EndpointReliability, EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
 export class FakeStore implements Store {
   endpoint: Endpoint = {
@@ -12,6 +12,7 @@ export class FakeStore implements Store {
   attempts: DeliveryAttempt[] = [];
   rehearsals: Rehearsal[] = [];
   audit: AuditEntry[] = [];
+  intents = new Map<string, DeliveryIntent>();
 
   async ping() {}
   async createEndpoint(input: Omit<Endpoint, "id" | "createdAt">) { this.endpoint = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; return this.endpoint; }
@@ -60,7 +61,68 @@ export class FakeStore implements Store {
   async addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.rehearsals.push(row); return row; }
   async latestPassingRehearsal(eventId: string) { return [...this.rehearsals].reverse().find((item) => item.eventId === eventId && item.passed) ?? null; }
   async addAudit(input: Omit<AuditEntry, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.audit.push(row); return row; }
+  async createDeliveryIntent(jobKey: string, job: DeliveryJob, availableAt = new Date().toISOString()) {
+    const existing = [...this.intents.values()].find((intent) => intent.jobKey === jobKey);
+    if (existing) return { intent: existing, created: false };
+    const id = randomUUID();
+    const intent: DeliveryIntent = {
+      id,
+      jobKey,
+      eventId: job.eventId,
+      job: { ...job, intentId: id },
+      state: "pending",
+      availableAt,
+      dispatchedAt: null,
+      processingAt: null,
+      completedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    this.intents.set(id, intent);
+    return { intent, created: true };
+  }
+  async listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit = 500) {
+    return [...this.intents.values()]
+      .filter((intent) => intent.availableAt <= nowIso && (
+        intent.state === "pending"
+        || (intent.state === "dispatched" && Boolean(intent.dispatchedAt && intent.dispatchedAt < staleBeforeIso))
+        || (intent.state === "processing" && Boolean(intent.processingAt && intent.processingAt < staleBeforeIso))
+      ))
+      .slice(0, limit);
+  }
+  async prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string) {
+    const intent = this.intents.get(id);
+    const dispatchable = intent && (
+      intent.state === "pending"
+      || (intent.state === "dispatched" && Boolean(intent.dispatchedAt && intent.dispatchedAt < staleBeforeIso))
+      || (intent.state === "processing" && Boolean(intent.processingAt && intent.processingAt < staleBeforeIso))
+    );
+    if (!intent || !dispatchable) return false;
+    this.intents.set(id, { ...intent, state: "dispatched", dispatchedAt, processingAt: null });
+    return true;
+  }
+  async releaseDeliveryIntent(id: string, dispatchedAt: string) {
+    const intent = this.intents.get(id);
+    if (intent?.state === "dispatched" && intent.dispatchedAt === dispatchedAt) {
+      this.intents.set(id, { ...intent, state: "pending", dispatchedAt: null });
+    }
+  }
+  async claimDeliveryIntent(id: string, processingAt: string) {
+    const intent = this.intents.get(id);
+    if (intent?.state !== "dispatched") return false;
+    this.intents.set(id, { ...intent, state: "processing", processingAt });
+    return true;
+  }
+  async releaseDeliveryIntentClaim(id: string, processingAt: string) {
+    const intent = this.intents.get(id);
+    if (intent?.state === "processing" && intent.processingAt === processingAt) {
+      this.intents.set(id, { ...intent, state: "dispatched", processingAt: null });
+    }
+  }
+  async completeDeliveryIntent(id: string, completedAt: string) {
+    const intent = this.intents.get(id);
+    if (intent) this.intents.set(id, { ...intent, state: "completed", completedAt });
+  }
   async stats(): Promise<DashboardStats> { const all = [...this.events.values()]; const delivered = all.filter((e) => e.status === "delivered").length; return { total: all.length, queued: all.filter((e) => e.status === "queued").length, delivered, retrying: all.filter((e) => e.status === "retrying").length, deadLetter: all.filter((e) => e.status === "dead_letter").length, deliveryRate: all.length ? delivered / all.length * 100 : 100 }; }
-  async recoverPending(_beforeIso: string): Promise<string[]> { return []; }
+  async recoverPending(_beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>> { return []; }
   async deleteOlderThan(_beforeIso: string): Promise<number> { return 0; }
 }

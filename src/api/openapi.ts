@@ -128,6 +128,9 @@ export const openApiDocument = {
       EndpointReliabilityList: { type: "array", items: { type: "object" } },
       RehearsalRequest: object(["destinationUrl"], { destinationUrl: uri, notes: { type: "string", maxLength: 500 } }),
       ReplayRequest: object(["destinationUrl", "reason"], { destinationUrl: uri, reason: { type: "string", minLength: 10, maxLength: 500 } }),
+      ActionReceipt: object(["queued", "eventId", "mode", "deliveryIntentId"], {
+        queued: { const: true }, eventId: uuid, mode: { enum: ["rehearsal", "replay"] }, deliveryIntentId: uuid, duplicate: { type: "boolean" },
+      }),
       EvidenceBundle: { type: "object", description: "Conforms to schema/replay-room-evidence-v1.schema.json" },
     },
   },
@@ -154,6 +157,6 @@ function operatorAction(summary: string, operationId: string, requestSchema: str
     tags: ["operator"], summary, operationId, security: bearerSecurity,
     parameters: [{ name: "eventId", in: "path", required: true, schema: uuid }],
     requestBody: { required: true, content: { "application/json": { schema: { $ref: `#/components/schemas/${requestSchema}` } } } },
-    responses: { "202": { description: successDescription }, "400": response("Input or destination is unsafe", "Problem"), "401": response("Bearer token is missing or invalid", "Problem"), "404": response("Event not found", "Problem"), "409": response("Replay guard rejected the request", "Problem") },
+    responses: { "202": response(successDescription, "ActionReceipt"), "400": response("Input or destination is unsafe", "Problem"), "401": response("Bearer token is missing or invalid", "Problem"), "404": response("Event not found", "Problem"), "409": response("Replay guard rejected the request", "Problem") },
   };
 }

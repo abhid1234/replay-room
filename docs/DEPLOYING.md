@@ -25,7 +25,7 @@ Render's free resources are suitable for evaluation, not production:
 - a free web service has an ephemeral filesystem and no shell access;
 - monthly instance-hour, bandwidth, and build-minute limits still apply.
 
-The durable source of truth is Postgres. Losing the free Key Value instance can strand queued events, so the embedded reconciler scans the ledger and re-enqueues old queued, retrying, or interrupted deliveries. That makes the platform limitation a tested recovery story instead of a hidden assumption.
+The durable source of truth is Postgres. Every exact queue payload is first stored as a delivery intent. Losing the free Key Value instance can strand transport work, so the embedded reconciler re-dispatches pending or stale intents with stable job keys and only synthesizes a job for an orphaned event with no open intent. That makes the platform limitation a tested recovery story instead of a hidden assumption.
 
 ## Blueprint activation
 

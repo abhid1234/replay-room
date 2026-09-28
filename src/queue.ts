@@ -17,8 +17,10 @@ export class RedisDeliveryQueue implements DeliveryQueue {
     await this.queue.add(job.mode, job, {
       delay: options.delayMs ?? 0,
       ...(options.jobId ? { jobId: options.jobId } : {}),
-      removeOnComplete: 1_000,
-      removeOnFail: 5_000,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 1_000 },
+      removeOnComplete: true,
+      removeOnFail: true,
     });
   }
 

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import type { CreateEventInput, CreateEventResult, Store } from "../domain/contracts.js";
+import type { CreateEventInput, CreateEventResult, DeliveryJob, Store } from "../domain/contracts.js";
 import { deliveryRate, reliabilityState } from "../domain/reliability.js";
 import type {
   AuditEntry,
   DashboardStats,
   DeliveryAttempt,
+  DeliveryIntent,
   Endpoint,
   EndpointReliability,
   EventDetail,
@@ -214,6 +215,92 @@ export class PostgresStore implements Store {
     return mapAudit(result.rows[0] as Row);
   }
 
+  async createDeliveryIntent(
+    jobKey: string,
+    job: DeliveryJob,
+    availableAt = new Date().toISOString(),
+  ): Promise<{ intent: DeliveryIntent; created: boolean }> {
+    const intentId = randomUUID();
+    const enrichedJob = { ...job, intentId };
+    const inserted = await this.pool.query(
+      `INSERT INTO delivery_intents (id, job_key, event_id, job, available_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5)
+       ON CONFLICT (job_key) DO NOTHING
+       RETURNING *`,
+      [intentId, jobKey, job.eventId, JSON.stringify(enrichedJob), availableAt],
+    );
+    if (inserted.rowCount) {
+      return { intent: mapDeliveryIntent(inserted.rows[0] as Row), created: true };
+    }
+
+    const existing = await this.pool.query("SELECT * FROM delivery_intents WHERE job_key = $1", [jobKey]);
+    return { intent: mapDeliveryIntent(existing.rows[0] as Row), created: false };
+  }
+
+  async listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit = 500): Promise<DeliveryIntent[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM delivery_intents
+       WHERE available_at <= $1
+         AND (state = 'pending'
+           OR (state = 'dispatched' AND dispatched_at < $2)
+           OR (state = 'processing' AND processing_at < $2))
+       ORDER BY available_at ASC, created_at ASC
+       LIMIT $3`,
+      [nowIso, staleBeforeIso, limit],
+    );
+    return result.rows.map((row) => mapDeliveryIntent(row as Row));
+  }
+
+  async prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'dispatched', dispatched_at = $2, processing_at = NULL
+       WHERE id = $1
+         AND (state = 'pending'
+           OR (state = 'dispatched' AND dispatched_at < $3)
+           OR (state = 'processing' AND processing_at < $3))`,
+      [id, dispatchedAt, staleBeforeIso],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async releaseDeliveryIntent(id: string, dispatchedAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'pending', dispatched_at = NULL
+       WHERE id = $1 AND state = 'dispatched' AND dispatched_at = $2`,
+      [id, dispatchedAt],
+    );
+  }
+
+  async claimDeliveryIntent(id: string, processingAt: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'processing', processing_at = $2
+       WHERE id = $1 AND state = 'dispatched'`,
+      [id, processingAt],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'dispatched', processing_at = NULL
+       WHERE id = $1 AND state = 'processing' AND processing_at = $2`,
+      [id, processingAt],
+    );
+  }
+
+  async completeDeliveryIntent(id: string, completedAt: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE delivery_intents
+       SET state = 'completed', completed_at = $2
+       WHERE id = $1 AND state <> 'completed'`,
+      [id, completedAt],
+    );
+  }
+
   async stats(): Promise<DashboardStats> {
     const result = await this.pool.query(
       `SELECT count(*)::int AS total,
@@ -234,19 +321,31 @@ export class PostgresStore implements Store {
     };
   }
 
-  async recoverPending(beforeIso: string): Promise<string[]> {
+  async recoverPending(beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>> {
     const recovered = await this.pool.query(
       `UPDATE webhook_events SET status='retrying', last_error='Reconciled after a stuck delivery', updated_at=now()
-       WHERE status='delivering' AND updated_at < $1 RETURNING id`,
+       WHERE status='delivering' AND updated_at < $1
+         AND NOT EXISTS (
+           SELECT 1 FROM delivery_intents intents
+           WHERE intents.event_id = webhook_events.id AND intents.state <> 'completed'
+         )
+       RETURNING id, attempt_count`,
       [beforeIso],
     );
     const pending = await this.pool.query(
-      `SELECT id FROM webhook_events
+      `SELECT id, attempt_count FROM webhook_events
        WHERE status IN ('queued', 'retrying') AND updated_at < $1
+         AND NOT EXISTS (
+           SELECT 1 FROM delivery_intents intents
+           WHERE intents.event_id = webhook_events.id AND intents.state <> 'completed'
+         )
        ORDER BY updated_at ASC LIMIT 500`,
       [beforeIso],
     );
-    return [...new Set([...recovered.rows, ...pending.rows].map((row) => String(row.id)))];
+    return [...new Map([...recovered.rows, ...pending.rows].map((row) => [String(row.id), {
+      eventId: String(row.id),
+      attemptCount: Number(row.attempt_count),
+    }])).values()];
   }
 
   async deleteOlderThan(beforeIso: string): Promise<number> {
@@ -297,6 +396,21 @@ function mapAudit(row: Row): AuditEntry {
   return {
     id: String(row.id), eventId: String(row.event_id), action: String(row.action), actor: String(row.actor),
     reason: row.reason === null ? null : String(row.reason), metadata: row.metadata as Record<string, unknown>, createdAt: iso(row.created_at),
+  };
+}
+
+function mapDeliveryIntent(row: Row): DeliveryIntent {
+  return {
+    id: String(row.id),
+    jobKey: String(row.job_key),
+    eventId: String(row.event_id),
+    job: row.job as DeliveryJob,
+    state: row.state as DeliveryIntent["state"],
+    availableAt: iso(row.available_at),
+    dispatchedAt: row.dispatched_at === null ? null : iso(row.dispatched_at),
+    processingAt: row.processing_at === null ? null : iso(row.processing_at),
+    completedAt: row.completed_at === null ? null : iso(row.completed_at),
+    createdAt: iso(row.created_at),
   };
 }
 

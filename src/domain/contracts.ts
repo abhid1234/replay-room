@@ -2,6 +2,7 @@ import type {
   AuditEntry,
   DashboardStats,
   DeliveryAttempt,
+  DeliveryIntent,
   DeliveryMode,
   Endpoint,
   EndpointReliability,
@@ -41,14 +42,28 @@ export interface Store {
   addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">): Promise<Rehearsal>;
   latestPassingRehearsal(eventId: string): Promise<Rehearsal | null>;
   addAudit(input: Omit<AuditEntry, "id" | "createdAt">): Promise<AuditEntry>;
+  createDeliveryIntent(
+    jobKey: string,
+    job: DeliveryJob,
+    availableAt?: string,
+  ): Promise<{ intent: DeliveryIntent; created: boolean }>;
+  listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit?: number): Promise<DeliveryIntent[]>;
+  prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string): Promise<boolean>;
+  releaseDeliveryIntent(id: string, dispatchedAt: string): Promise<void>;
+  claimDeliveryIntent(id: string, processingAt: string): Promise<boolean>;
+  releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void>;
+  completeDeliveryIntent(id: string, completedAt: string): Promise<void>;
   stats(): Promise<DashboardStats>;
-  recoverPending(beforeIso: string): Promise<string[]>;
+  recoverPending(beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>>;
   deleteOlderThan(beforeIso: string): Promise<number>;
 }
 
 export interface DeliveryJob {
   eventId: string;
   mode: DeliveryMode;
+  cycleId?: string;
+  attemptNumber?: number;
+  intentId?: string;
   destinationUrl?: string;
   actor?: string;
   reason?: string;

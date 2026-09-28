@@ -12,11 +12,13 @@ received -> queued -> delivering -> delivered
                          +-> dead_letter -> rehearsal -> guarded replay -> delivered
 ```
 
-The API acknowledges only after Postgres stores the event and BullMQ accepts the delivery job. Delivery failures never delete or overwrite the received record.
+The API stores the event and a uniquely keyed delivery intent in Postgres before BullMQ becomes authoritative for transport. Delivery failures never delete or overwrite the received record.
 
 ## Delivery semantics
 
-Replay Room provides at-least-once delivery. It does not claim exactly-once side effects. Receivers must deduplicate with the stable event ID or supplied idempotency key.
+Replay Room provides at-least-once delivery. It does not claim exactly-once side effects. Receivers must deduplicate with the stable event ID or supplied idempotency key. A Postgres intent claim prevents two workers from executing the same queue job concurrently, but it cannot eliminate the classic ambiguity when a receiver accepts a request and the worker crashes before recording the response.
+
+Every live delivery, rehearsal, replay, and application-level retry has a durable intent with a stable job key, exact job payload, availability time, and lifecycle (`pending`, `dispatched`, `processing`, `completed`). The worker atomically claims the intent before making a network call. Duplicate queue deliveries become no-ops, and a guarded replay receives a fresh per-cycle retry ordinal instead of inheriting the exhausted attempt budget that originally created the dead letter.
 
 Retryable outcomes:
 
@@ -54,7 +56,7 @@ Production replay requires a passing record with the same payload digest and des
 
 ## Recovery
 
-The reconciler runs every ten minutes. It returns deliveries stuck in `delivering` for more than five minutes to the queue, recovers queued or retrying records stranded by a temporary Redis failure, and deletes event records past the configured retention window. The Postgres ledger remains authoritative; Redis is transport, not system of record.
+The reconciler runs every ten minutes. It re-dispatches pending or stale delivery intents with the same BullMQ job key, synthesizes a recovery intent only for legacy/orphaned queued records that have no open intent, and deletes event records past the configured retention window. Queue dispatch uses a five-minute lease so concurrent reconcilers cannot independently own the same intent. The Postgres ledger remains authoritative; Redis is disposable transport, not the system of record.
 
 In the free lab topology, the API process embeds both the queue worker and reconciliation loop because Render does not offer free background-worker or cron compute. In the production upgrade, those responsibilities run as separate services. `/api/system` reports `embedded-free` or `split-services` so the dashboard never labels an embedded loop as a dedicated service.
 

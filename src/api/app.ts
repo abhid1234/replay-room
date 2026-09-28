@@ -12,6 +12,7 @@ import { evaluateReplay } from "../domain/replay-guard.js";
 import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifySignature } from "../domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
 import type { Endpoint } from "../domain/types.js";
+import { deliveryJobKey, dispatchDeliveryIntent, scheduleDelivery } from "../dispatch.js";
 import { openApiDocument } from "./openapi.js";
 
 interface Dependencies {
@@ -186,15 +187,18 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
-    await queue.enqueue({
+    const job = {
       eventId: id,
       mode: "rehearsal",
+      cycleId: `rehearsal-${randomBytes(8).toString("hex")}`,
+      attemptNumber: 1,
       destinationUrl: input.destinationUrl,
       actor: actorFrom(request.headers),
       reason: input.notes || "Operator-requested rehearsal",
-    });
+    } as const;
+    const scheduled = await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
     reply.code(202);
-    return { queued: true, eventId: id, mode: "rehearsal" };
+    return { queued: true, eventId: id, mode: "rehearsal", deliveryIntentId: scheduled.intent.id };
   });
 
   app.post("/api/events/:id/replay", { preHandler: adminGuard(config) }, async (request, reply) => {
@@ -206,17 +210,44 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const rehearsal = await store.latestPassingRehearsal(id);
     const actor = actorFrom(request.headers);
     const decision = evaluateReplay(event, rehearsal, { actor, reason: input.reason, destinationUrl: input.destinationUrl });
-    await store.addAudit({
+    if (!decision.allowed) {
+      await store.addAudit({
+        eventId: id,
+        action: "replay.blocked",
+        actor,
+        reason: input.reason,
+        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons },
+      });
+      return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
+    }
+    const job = {
       eventId: id,
-      action: decision.allowed ? "replay.approved" : "replay.blocked",
+      mode: "replay",
+      cycleId: `replay-${rehearsal!.id}`,
+      attemptNumber: 1,
+      destinationUrl: input.destinationUrl,
       actor,
       reason: input.reason,
-      metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons },
+    } as const;
+    const jobKey = deliveryJobKey(job);
+    const scheduled = await store.createDeliveryIntent(jobKey, job);
+    await store.addAudit({
+      eventId: id,
+      action: scheduled.created ? "replay.approved" : "replay.duplicate_suppressed",
+      actor,
+      reason: input.reason,
+      metadata: {
+        destinationUrl: input.destinationUrl,
+        guardReasons: decision.reasons,
+        deliveryIntentId: scheduled.intent.id,
+        jobKey,
+      },
     });
-    if (!decision.allowed) return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
-    await queue.enqueue({ eventId: id, mode: "replay", destinationUrl: input.destinationUrl, actor, reason: input.reason });
+    if (scheduled.intent.state !== "completed") {
+      await dispatchDeliveryIntent(store, queue, scheduled.intent, new Date());
+    }
     reply.code(202);
-    return { queued: true, eventId: id, mode: "replay" };
+    return { queued: true, eventId: id, mode: "replay", deliveryIntentId: scheduled.intent.id, duplicate: !scheduled.created };
   });
 
   app.post("/ingest/:ingestKey", { config: { rateLimit: false } }, async (request, reply) => {
@@ -260,8 +291,9 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         reason: null,
         metadata: { requestId: request.id, endpoint: endpoint.name },
       });
-      await queue.enqueue({ eventId: result.event.id, mode: "live" }, { jobId: `live-${result.event.id}` });
     }
+    const job = { eventId: result.event.id, mode: "live", cycleId: "live", attemptNumber: 1 } as const;
+    await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
 
     reply.code(result.duplicate ? 200 : 202);
     return { accepted: true, duplicate: result.duplicate, eventId: result.event.id, status: result.event.status };

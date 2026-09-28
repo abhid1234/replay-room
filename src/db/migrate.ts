@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { loadConfig } from "../config.js";
@@ -14,9 +14,11 @@ export async function migrate(connectionString = loadConfig().DATABASE_URL): Pro
       name text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
-    const name = "001_initial.sql";
-    const existing = await client.query("SELECT 1 FROM schema_migrations WHERE name = $1", [name]);
-    if (!existing.rowCount) {
+    const migrationsDirectory = fileURLToPath(new URL("./migrations/", import.meta.url));
+    const names = (await readdir(migrationsDirectory)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+    for (const name of names) {
+      const existing = await client.query("SELECT 1 FROM schema_migrations WHERE name = $1", [name]);
+      if (existing.rowCount) continue;
       const sql = await readFile(fileURLToPath(new URL(`./migrations/${name}`, import.meta.url)), "utf8");
       await client.query("BEGIN");
       try {

@@ -1,6 +1,7 @@
 import type { DeliveryJob, DeliveryQueue, DeliveryResult, Store } from "./domain/contracts.js";
 import { isRetryableStatus, retryDelayMs } from "./domain/retry.js";
 import { assertSafeResolvedDestination, type DestinationLookup, UnsafeDestinationError } from "./domain/security.js";
+import { deliveryJobKey, dispatchDeliveryIntent } from "./dispatch.js";
 
 interface DeliveryDependencies {
   store: Store;
@@ -12,14 +13,38 @@ interface DeliveryDependencies {
 }
 
 export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Promise<DeliveryResult> {
+  const now = deps.now ?? Date.now;
+  const processingAt = new Date(now()).toISOString();
+  if (job.intentId) {
+    const claimed = await deps.store.claimDeliveryIntent(job.intentId, processingAt);
+    if (!claimed) {
+      const current = await deps.store.getEvent(job.eventId);
+      if (!current) throw new Error(`Event ${job.eventId} does not exist`);
+      return { delivered: current.status === "delivered", terminal: true, nextStatus: current.status, retryDelayMs: null };
+    }
+  }
+
+  try {
+    return await deliverClaimed(job, deps, now);
+  } catch (error) {
+    if (job.intentId) await deps.store.releaseDeliveryIntentClaim(job.intentId, processingAt);
+    throw error;
+  }
+}
+
+async function deliverClaimed(
+  job: DeliveryJob,
+  deps: DeliveryDependencies,
+  now: () => number,
+): Promise<DeliveryResult> {
   const detail = await deps.store.getEvent(job.eventId);
   if (!detail) throw new Error(`Event ${job.eventId} does not exist`);
 
   const destinationInput = job.destinationUrl ?? detail.endpoint.destinationUrl;
   let destination = safeDestinationLabel(destinationInput);
   const fetchFn = deps.fetchFn ?? fetch;
-  const now = deps.now ?? Date.now;
   const nextAttempt = detail.attemptCount + 1;
+  const deliveryAttempt = job.attemptNumber ?? nextAttempt;
   const startedAt = now();
 
   if (job.mode !== "rehearsal") {
@@ -80,6 +105,7 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
       reason: job.reason ?? null,
       metadata: { destination, statusCode, durationMs },
     });
+    await completeIntent(job, deps.store, now());
     return { delivered: successful, terminal: true, nextStatus: detail.status, retryDelayMs: null };
   }
 
@@ -92,11 +118,12 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
       reason: job.reason ?? null,
       metadata: { destination, statusCode, attempt: nextAttempt, durationMs },
     });
+    await completeIntent(job, deps.store, now());
     return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
   }
 
   const retryable = !unsafeDestination && (statusCode === null || isRetryableStatus(statusCode));
-  const terminal = !retryable || nextAttempt >= detail.endpoint.maxAttempts;
+  const terminal = !retryable || deliveryAttempt >= detail.endpoint.maxAttempts;
   const lastError = errorMessage ?? `Destination returned HTTP ${statusCode}`;
   if (terminal) {
     await deps.store.updateEvent(detail.id, { status: "dead_letter", lastError });
@@ -105,15 +132,39 @@ export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Pro
       action: "delivery.dead_lettered",
       actor: "worker",
       reason: lastError,
-      metadata: { destination, statusCode, attempt: nextAttempt },
+      metadata: { destination, statusCode, attempt: nextAttempt, deliveryAttempt },
     });
+    await completeIntent(job, deps.store, now());
     return { delivered: false, terminal: true, nextStatus: "dead_letter", retryDelayMs: null };
   }
 
-  const delayMs = retryDelayMs(nextAttempt);
+  const delayMs = retryDelayMs(deliveryAttempt);
+  const { intentId: _completedIntentId, ...retryableJob } = job;
+  const retryJob: DeliveryJob = {
+    ...retryableJob,
+    cycleId: job.cycleId ?? job.mode,
+    attemptNumber: deliveryAttempt + 1,
+    eventId: detail.id,
+  };
+  const availableAt = new Date(now() + delayMs).toISOString();
+  const nextIntent = await deps.store.createDeliveryIntent(deliveryJobKey(retryJob), retryJob, availableAt);
+  try {
+    await dispatchDeliveryIntent(deps.store, deps.queue, nextIntent.intent, new Date(now()));
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "delivery_retry.dispatch_deferred",
+      intentId: nextIntent.intent.id,
+      eventId: detail.id,
+      error: error instanceof Error ? error.message : "Unknown dispatch error",
+    }));
+  }
   await deps.store.updateEvent(detail.id, { status: "retrying", lastError });
-  await deps.queue.enqueue({ ...job, eventId: detail.id }, { delayMs });
+  await completeIntent(job, deps.store, now());
   return { delivered: false, terminal: false, nextStatus: "retrying", retryDelayMs: delayMs };
+}
+
+async function completeIntent(job: DeliveryJob, store: Store, nowMs: number): Promise<void> {
+  if (job.intentId) await store.completeDeliveryIntent(job.intentId, new Date(nowMs).toISOString());
 }
 
 function safeDestinationLabel(rawUrl: string): string {

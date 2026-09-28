@@ -19,7 +19,7 @@ Recent developer discussions keep converging on the same operational gap: receiv
 - rehearsal against a controlled endpoint;
 - a replay guard that binds approval to the rehearsed payload hash and destination;
 - operator reason and append-only audit history;
-- scheduled reconciliation for stuck deliveries and events stranded between the database and queue.
+- a Postgres delivery-intent outbox that survives queue loss, suppresses duplicate replay approvals, and lets reconciliation reconstruct exact jobs.
 
 The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md).
 
@@ -68,8 +68,8 @@ The root [render.yaml](render.yaml) creates the free lab topology as one Bluepri
 |---|---|
 | Static site | Operator dashboard |
 | Free web service | Public ingest, admin API, queue consumer, and reconciliation loop |
-| Postgres | Durable event, attempt, rehearsal, and audit ledger |
-| Key Value | BullMQ work queue and delayed retries |
+| Postgres | Durable event, delivery-intent, attempt, rehearsal, and audit ledger |
+| Key Value | Disposable BullMQ transport, delayed retries, heartbeats, and rate limits |
 | Preview environment | Disposable full-stack environment for PR testing |
 
 The free topology is honest about its constraints: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
@@ -84,7 +84,7 @@ A replay is accepted only when all of these are true:
 4. The event payload hash still matches the rehearsed hash.
 5. The production replay destination exactly matches the rehearsed destination.
 
-Every approval and rejection is written to the audit log. The guard is deterministic and covered by unit tests.
+Every approval and rejection is written to the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
 ## Quick start
 
@@ -152,6 +152,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Network calls time out after 10 seconds.
 - Response bodies are truncated before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
+- Postgres-backed delivery-intent claims suppress duplicate queue execution and preserve exact replay metadata through Key Value loss.
 - Incident exports use a separately generated evidence-signing secret and disable response caching.
 
 This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, DNS pinning to remove the residual lookup-to-connect rebinding window, and configurable retention by tenant.
@@ -162,7 +163,7 @@ This is an early-stage project. Production hardening would add organization-scop
 npm run verify
 ```
 
-The verification gate type-checks the API/worker/cron code, runs domain, API, delivery, diagnosis, heartbeat, free-runtime, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
+The verification gate type-checks the API/worker/cron code, runs domain, API, delivery-intent race, queue-loss recovery, diagnosis, heartbeat, free-runtime, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
 
 GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs.
 

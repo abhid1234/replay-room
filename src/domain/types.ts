@@ -7,6 +7,21 @@ export type EventStatus =
 
 export type DeliveryMode = "live" | "rehearsal" | "replay";
 
+export type DeliveryIntentState = "pending" | "dispatched" | "processing" | "completed";
+
+export interface DeliveryIntent {
+  id: string;
+  jobKey: string;
+  eventId: string;
+  job: import("./contracts.js").DeliveryJob;
+  state: DeliveryIntentState;
+  availableAt: string;
+  dispatchedAt: string | null;
+  processingAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
 export interface Endpoint {
   id: string;
   name: string;
