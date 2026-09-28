@@ -1,0 +1,150 @@
+# Replay Room
+
+**Rehearse a failed webhook before you replay it.**
+
+Replay Room is an operator console for the dangerous moment after an event lands in a dead-letter queue. It preserves the original payload, records every delivery attempt, requires a successful rehearsal against the exact destination and payload hash, and only then allows an audited replay.
+
+This is a portfolio project built to exercise Render as a platform, not merely run one process on it.
+
+## Why this project
+
+Recent developer discussions keep converging on the same operational gap: receiving a webhook is easy; proving that a failed event is safe to replay is not. Basic inspectors can capture and resend. Replay Room adds the part an incident operator needs:
+
+- immutable receipt of the original event;
+- idempotency-aware ingestion;
+- async delivery with exponential backoff and jitter;
+- a dead-letter state with complete attempt history;
+- rehearsal against a controlled endpoint;
+- a replay guard that binds approval to the rehearsed payload hash and destination;
+- operator reason and append-only audit history;
+- scheduled reconciliation for stuck deliveries and events stranded between the database and queue.
+
+The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## Render architecture
+
+```mermaid
+flowchart LR
+  Provider[Webhook provider] -->|POST /ingest/:key| API[Render web service\nFastify API]
+  Dashboard[Render static site\nReact console] --> API
+  API --> PG[(Render Postgres\nimmutable event ledger)]
+  API --> KV[(Render Key Value\nBullMQ queue)]
+  KV --> Worker[Render background worker\ndelivery + rehearsal]
+  Worker --> Target[Customer destination]
+  Worker --> PG
+  Cron[Render cron job\nreconcile + retention] --> PG
+  Cron --> KV
+```
+
+The root [render.yaml](render.yaml) creates the entire topology as one Blueprint:
+
+| Render primitive | Replay Room responsibility |
+|---|---|
+| Static site | Operator dashboard |
+| Web service | Public ingest and admin API |
+| Background worker | Delivery, retry, rehearsal, and replay |
+| Postgres | Durable event, attempt, rehearsal, and audit ledger |
+| Key Value | BullMQ work queue and delayed retries |
+| Cron job | Stuck-delivery reconciliation and retention |
+| Preview environment | Disposable full-stack environment for PR testing |
+
+## The guarded replay invariant
+
+A replay is accepted only when all of these are true:
+
+1. The event is in `dead_letter` state.
+2. An operator supplied a meaningful reason and identity.
+3. The latest rehearsal succeeded.
+4. The event payload hash still matches the rehearsed hash.
+5. The production replay destination exactly matches the rehearsed destination.
+
+Every approval and rejection is written to the audit log. The guard is deterministic and covered by unit tests.
+
+## Quick start
+
+Prerequisites: Node.js 22+, Docker, and Docker Compose.
+
+```bash
+cp .env.example .env
+docker compose up -d
+npm install
+npm run db:migrate
+npm run db:seed
+```
+
+Run the three processes in separate terminals:
+
+```bash
+npm run dev
+npm run dev:worker
+npm run dev:web
+```
+
+Open `http://localhost:5173`, enter the `ADMIN_TOKEN` from `.env`, and create an endpoint. For local failure testing, use one of the built-in development sinks:
+
+- `http://localhost:4000/demo/sink/accept`
+- `http://localhost:4000/demo/sink/retry`
+- `http://localhost:4000/demo/sink/reject`
+
+Send an event:
+
+```bash
+curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: checkout-1042' \
+  -d '{"type":"checkout.completed","orderId":"ord_1042","amount":12900}'
+```
+
+## API surface
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Database-backed health check |
+| `POST` | `/ingest/:ingestKey` | Accept and deduplicate an event |
+| `GET` | `/api/stats` | Dashboard status counts |
+| `GET/POST` | `/api/endpoints` | List or create ingest endpoints |
+| `GET` | `/api/events` | List recent events |
+| `GET` | `/api/events/:id` | Event, attempts, rehearsals, and audit trail |
+| `POST` | `/api/events/:id/rehearse` | Queue a safe rehearsal |
+| `POST` | `/api/events/:id/replay` | Run the replay guard and queue an approved replay |
+
+Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when taking an operator action.
+
+## Security boundaries
+
+- Sensitive request headers are redacted before storage.
+- Payloads are capped at 256 KiB by default.
+- Generic HMAC verification is supported with `x-replay-signature: sha256=<digest>`.
+- Private, loopback, credential-bearing, and non-HTTP destinations are blocked in production.
+- Network calls time out after 10 seconds.
+- Response bodies are truncated before storage.
+- Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
+
+This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, outbound DNS rebinding protection, rate limiting, and configurable retention by tenant.
+
+## Verification
+
+```bash
+npm run verify
+```
+
+The verification gate type-checks the API/worker/cron code, runs domain and delivery tests, and builds the production API and dashboard bundles.
+
+## Interview walkthrough
+
+1. Start with a webhook sent to the `retry` demo sink.
+2. Show the immediate `202` response while the worker owns delivery.
+3. Let retries exhaust into `dead_letter`.
+4. Open the complete attempt timeline.
+5. Rehearse against the accepting sink.
+6. Try to replay to a different destination and show the deterministic guard rejection.
+7. Replay to the rehearsed destination with an operator reason.
+8. Open `render.yaml` and map each behavior to its Render service.
+
+## Status
+
+Version `0.1.0` is a production-shaped first implementation. It is ready for local verification and a first Render Blueprint deployment; it is not represented as a production-tested managed service.
+
+## License
+
+MIT

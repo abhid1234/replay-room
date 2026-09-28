@@ -1,0 +1,202 @@
+import { randomBytes } from "node:crypto";
+import cors from "@fastify/cors";
+import Fastify, { type FastifyInstance } from "fastify";
+import { z } from "zod";
+import type { AppConfig } from "../config.js";
+import type { DeliveryQueue, Store } from "../domain/contracts.js";
+import { evaluateReplay } from "../domain/replay-guard.js";
+import { assertSafeDestination, redactHeaders, sha256, verifySignature } from "../domain/security.js";
+
+interface Dependencies {
+  config: AppConfig;
+  store: Store;
+  queue: DeliveryQueue;
+}
+
+const endpointSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  destinationUrl: z.string().url(),
+  signingSecret: z.string().min(16).max(256).nullable().optional(),
+  maxAttempts: z.number().int().min(1).max(20).default(5),
+});
+
+const rehearsalSchema = z.object({
+  destinationUrl: z.string().url(),
+  notes: z.string().max(500).default(""),
+});
+
+const replaySchema = z.object({
+  destinationUrl: z.string().url(),
+  reason: z.string().trim().min(10).max(500),
+});
+
+export async function buildApp({ config, store, queue }: Dependencies): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
+    bodyLimit: config.MAX_PAYLOAD_BYTES,
+    requestIdHeader: "x-request-id",
+  });
+
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    try {
+      const rawBody = String(body);
+      (request as typeof request & { rawBody: string }).rawBody = rawBody;
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
+  await app.register(cors, {
+    origin: config.WEB_ORIGIN.split(",").map((origin) => origin.trim()),
+    methods: ["GET", "POST", "OPTIONS"],
+  });
+
+  app.get("/health", async (_request, reply) => {
+    try {
+      await store.ping();
+      return { status: "ok", service: "replay-room-api", timestamp: new Date().toISOString() };
+    } catch (error) {
+      reply.code(503);
+      return { status: "degraded", error: error instanceof Error ? error.message : "Database unavailable" };
+    }
+  });
+
+  app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
+  app.get("/api/endpoints", { preHandler: adminGuard(config) }, async () => store.listEndpoints());
+  app.post("/api/endpoints", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const input = endpointSchema.parse(request.body);
+    assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
+    const endpoint = await store.createEndpoint({
+      name: input.name,
+      ingestKey: `hook_${randomBytes(12).toString("base64url")}`,
+      destinationUrl: input.destinationUrl,
+      signingSecret: input.signingSecret ?? null,
+      maxAttempts: input.maxAttempts,
+    });
+    reply.code(201);
+    return endpoint;
+  });
+
+  app.get("/api/events", { preHandler: adminGuard(config) }, async (request) => {
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }).parse(request.query);
+    return store.listEvents(query.limit);
+  });
+
+  app.get("/api/events/:id", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    return event;
+  });
+
+  app.post("/api/events/:id/rehearse", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const input = rehearsalSchema.parse(request.body);
+    assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    await queue.enqueue({
+      eventId: id,
+      mode: "rehearsal",
+      destinationUrl: input.destinationUrl,
+      actor: actorFrom(request.headers),
+      reason: input.notes || "Operator-requested rehearsal",
+    });
+    reply.code(202);
+    return { queued: true, eventId: id, mode: "rehearsal" };
+  });
+
+  app.post("/api/events/:id/replay", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const input = replaySchema.parse(request.body);
+    assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    const rehearsal = await store.latestPassingRehearsal(id);
+    const actor = actorFrom(request.headers);
+    const decision = evaluateReplay(event, rehearsal, { actor, reason: input.reason, destinationUrl: input.destinationUrl });
+    await store.addAudit({
+      eventId: id,
+      action: decision.allowed ? "replay.approved" : "replay.blocked",
+      actor,
+      reason: input.reason,
+      metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons },
+    });
+    if (!decision.allowed) return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
+    await queue.enqueue({ eventId: id, mode: "replay", destinationUrl: input.destinationUrl, actor, reason: input.reason });
+    reply.code(202);
+    return { queued: true, eventId: id, mode: "replay" };
+  });
+
+  app.post("/ingest/:ingestKey", async (request, reply) => {
+    const { ingestKey } = z.object({ ingestKey: z.string().min(12).max(100) }).parse(request.params);
+    const endpoint = await store.getEndpointByIngestKey(ingestKey);
+    if (!endpoint) return reply.code(404).send({ error: "Unknown ingest endpoint" });
+
+    const rawPayload = (request as typeof request & { rawBody?: string }).rawBody ?? JSON.stringify(request.body ?? null);
+    if (endpoint.signingSecret) {
+      const signature = String(request.headers["x-replay-signature"] ?? "");
+      if (!signature || !verifySignature(endpoint.signingSecret, rawPayload, signature)) {
+        return reply.code(401).send({ error: "Invalid webhook signature" });
+      }
+    }
+
+    const result = await store.createEvent({
+      endpointId: endpoint.id,
+      idempotencyKey: stringHeader(request.headers["idempotency-key"] ?? request.headers["x-event-id"]),
+      headers: redactHeaders(request.headers),
+      payload: request.body ?? null,
+      payloadSha256: sha256(rawPayload),
+    });
+
+    if (!result.duplicate) {
+      await store.addAudit({
+        eventId: result.event.id,
+        action: "event.received",
+        actor: "ingest",
+        reason: null,
+        metadata: { requestId: request.id, endpoint: endpoint.name },
+      });
+      await queue.enqueue({ eventId: result.event.id, mode: "live" }, { jobId: `live-${result.event.id}` });
+    }
+
+    reply.code(result.duplicate ? 200 : 202);
+    return { accepted: true, duplicate: result.duplicate, eventId: result.event.id, status: result.event.status };
+  });
+
+  app.post("/demo/sink/:behavior", async (request, reply) => {
+    if (config.NODE_ENV === "production") return reply.code(404).send({ error: "Not found" });
+    const { behavior } = z.object({ behavior: z.enum(["accept", "reject", "retry"]) }).parse(request.params);
+    if (behavior === "reject") return reply.code(400).send({ accepted: false, reason: "Permanent validation failure" });
+    if (behavior === "retry") return reply.code(503).send({ accepted: false, reason: "Simulated downstream outage" });
+    return { accepted: true, receivedAt: new Date().toISOString(), mode: request.headers["x-replay-room-mode"] };
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({ error: "Invalid request", issues: error.issues });
+    }
+    request.log.error(error);
+    return reply.code(500).send({ error: "Internal server error", requestId: request.id });
+  });
+
+  return app;
+}
+
+function adminGuard(config: AppConfig) {
+  return async (request: { headers: Record<string, unknown> }, reply: { code(status: number): { send(body: unknown): unknown } }) => {
+    const token = stringHeader(request.headers.authorization)?.replace(/^Bearer\s+/i, "");
+    if (token !== config.ADMIN_TOKEN) return reply.code(401).send({ error: "Unauthorized" });
+  };
+}
+
+function actorFrom(headers: Record<string, unknown>): string {
+  return stringHeader(headers["x-operator"])?.slice(0, 120) || "operator";
+}
+
+function stringHeader(value: unknown): string | null {
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}

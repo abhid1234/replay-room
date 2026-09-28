@@ -1,0 +1,43 @@
+{
+  "name": "replay-room",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A guarded webhook rehearsal and replay console built for Render.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/api/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "dev:web": "npm --workspace web run dev",
+    "build": "tsc -p tsconfig.build.json && npm --workspace web run build",
+    "start:api": "node dist/api/server.js",
+    "start:worker": "node dist/worker.js",
+    "start:cron": "node dist/cron.js",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.0",
+    "bullmq": "6.3.9",
+    "fastify": "5.12.5",
+    "ioredis": "6.0.0",
+    "pg": "8.23.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  }
+}
