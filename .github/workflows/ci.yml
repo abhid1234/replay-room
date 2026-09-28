@@ -2,14 +2,17 @@ name: verify
 
 on:
   push:
-    branches: [main]
   pull_request:
+
+concurrency:
+  group: replay-room-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +22,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+
+  production-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+  container:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag replay-room:${{ github.sha }} .

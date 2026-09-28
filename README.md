@@ -1,5 +1,7 @@
 # Replay Room
 
+[![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
+
 **Rehearse a failed webhook before you replay it.**
 
 Replay Room is an operator console for the dangerous moment after an event lands in a dead-letter queue. It preserves the original payload, records every delivery attempt, requires a successful rehearsal against the exact destination and payload hash, and only then allows an audited replay.
@@ -157,6 +159,8 @@ npm run verify
 ```
 
 The verification gate type-checks the API/worker/cron code, runs domain, API, delivery, diagnosis, and heartbeat tests, and builds the production API and dashboard bundles.
+
+GitHub Actions runs the same gate on every branch push and pull request, audits production dependencies at high severity, and builds the release Docker image on a clean Linux runner.
 
 ## Interview walkthrough
 
