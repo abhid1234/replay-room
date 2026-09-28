@@ -7,6 +7,8 @@ export {
 } from "./domain/evidence.js";
 export { diagnoseEvent } from "./domain/diagnosis.js";
 export { evaluateReplay } from "./domain/replay-guard.js";
+export { assessReplayRisk } from "./domain/replay-risk.js";
+export type { ReplayRiskAssessment, ReplayRiskLevel, ReplayRiskSignal } from "./domain/replay-risk.js";
 export { openApiDocument } from "./api/openapi.js";
 export type {
   AuditEntry,

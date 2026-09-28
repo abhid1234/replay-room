@@ -53,6 +53,13 @@ type Detail = Event & {
     evidence: string[];
     nextAction: string;
   };
+  replayRisk: {
+    level: "low" | "elevated" | "high";
+    requiresAcknowledgement: boolean;
+    headline: string;
+    summary: string;
+    signals: Array<{ code: string; severity: "low" | "elevated" | "high"; message: string }>;
+  };
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
@@ -123,11 +130,11 @@ export function App() {
     setMessage("Rehearsal queued. Refresh in a moment to inspect the result.");
   };
 
-  const replay = async (event: Detail, destinationUrl: string, reason: string) => {
-    await request(`/api/events/${event.id}/replay`, {
-      method: "POST", headers: { "x-operator": "dashboard" }, body: JSON.stringify({ destinationUrl, reason }),
+  const replay = async (event: Detail, destinationUrl: string, reason: string, acknowledgeRisk: boolean) => {
+    const receipt = await request<{ duplicate?: boolean }>(`/api/events/${event.id}/replay`, {
+      method: "POST", headers: { "x-operator": "dashboard" }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
     });
-    setMessage("Guard approved the replay and queued it for delivery.");
+    setMessage(receipt.duplicate ? "That replay intent already exists; no duplicate delivery was queued." : "Guard approved the replay and queued it for delivery.");
   };
 
   const downloadEvidence = async (event: Detail) => {
@@ -198,7 +205,7 @@ export function App() {
 
         <article className="panel detail-panel">
           <div className="panel-title"><span>Replay inspector</span><span className="mono">{selected?.id.slice(0, 12) ?? "NO EVENT"}</span></div>
-          {selected ? <EventInspector event={selected} onRehearse={rehearse} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
+          {selected ? <EventInspector key={selected.id} event={selected} onRehearse={rehearse} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
         </article>
       </section>
 
@@ -291,11 +298,12 @@ function ageLabel(seconds: number | null | undefined): string {
 function EventInspector({ event, onRehearse, onReplay, onDownload }: {
   event: Detail;
   onRehearse: (event: Detail, target: string) => Promise<void>;
-  onReplay: (event: Detail, target: string, reason: string) => Promise<void>;
+  onReplay: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean) => Promise<void>;
   onDownload: (event: Detail) => Promise<void>;
 }) {
   const [target, setTarget] = useState(event.endpoint.destinationUrl);
   const [reason, setReason] = useState("Receiver fix verified; replay approved after rehearsal.");
+  const [riskAccepted, setRiskAccepted] = useState(false);
   return <div className="inspector">
     <div className={`diagnosis ${event.diagnosis.severity}`}>
       <div><span>Flight recorder diagnosis</span><b>{event.diagnosis.code.replaceAll("_", " ")}</b></div>
@@ -308,12 +316,22 @@ function EventInspector({ event, onRehearse, onReplay, onDownload }: {
       <span><b>Signed evidence</b><small>Portable JSON with an HMAC integrity seal</small></span>
       <button onClick={() => void onDownload(event)}>Download bundle</button>
     </div>
+    <div className={`risk-card ${event.replayRisk.level}`}>
+      <div><span>Duplicate-side-effect risk</span><b>{event.replayRisk.level}</b></div>
+      <h3>{event.replayRisk.headline}</h3>
+      <p>{event.replayRisk.summary}</p>
+      <ul>{event.replayRisk.signals.map((signal) => <li key={signal.code}>{signal.message}</li>)}</ul>
+      {event.replayRisk.requiresAcknowledgement && <label className="risk-acknowledgement">
+        <input type="checkbox" checked={riskAccepted} onChange={(change) => setRiskAccepted(change.target.checked)} />
+        <span>I reviewed the ambiguous outcome and accept the duplicate-side-effect risk.</span>
+      </label>}
+    </div>
     <div className="guard-banner"><span>Replay guard</span><strong>{event.status === "dead_letter" ? "Waiting for rehearsal evidence" : "Replay locked"}</strong></div>
     <pre>{JSON.stringify(event.payload, null, 2)}</pre>
     <div className="action-form">
       <label>Rehearsal / replay target</label><input value={target} onChange={(e) => setTarget(e.target.value)} />
       <label>Operator reason</label><textarea value={reason} onChange={(e) => setReason(e.target.value)} />
-      <div className="actions"><button onClick={() => void onRehearse(event, target)}>Run rehearsal</button><button className="danger-button" onClick={() => void onReplay(event, target, reason)}>Approve replay</button></div>
+      <div className="actions"><button onClick={() => void onRehearse(event, target)}>Run rehearsal</button><button className="danger-button" disabled={event.replayRisk.requiresAcknowledgement && !riskAccepted} onClick={() => void onReplay(event, target, reason, riskAccepted)}>Approve replay</button></div>
     </div>
     <div className="timeline">
       {[...event.audit, ...event.rehearsals.map((item) => ({ ...item, action: item.passed ? "rehearsal.passed" : "rehearsal.failed", actor: "worker", reason: item.notes }))]

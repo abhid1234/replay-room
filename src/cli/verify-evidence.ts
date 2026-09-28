@@ -8,6 +8,7 @@ interface EvidenceSummary {
   eventId: string;
   status: string;
   diagnosis: string;
+  replayRisk: string;
   attempts: number;
   rehearsals: number;
   auditEntries: number;
@@ -27,6 +28,7 @@ export async function inspectEvidenceFile(path: string): Promise<EvidenceSummary
     eventId: bundle.event.id,
     status: bundle.event.status,
     diagnosis: bundle.diagnosis.code,
+    replayRisk: bundle.replayRisk.level,
     attempts: bundle.attempts.length,
     rehearsals: bundle.rehearsals.length,
     auditEntries: bundle.audit.length,

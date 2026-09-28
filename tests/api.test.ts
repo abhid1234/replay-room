@@ -234,6 +234,59 @@ describe("webhook API", () => {
     expect(store.audit.map((entry) => entry.action)).toEqual(["replay.approved", "replay.duplicate_suppressed"]);
   });
 
+  it("blocks ambiguous replay until the operator acknowledges duplicate-side-effect risk", async () => {
+    const store = new FakeStore();
+    const queue = new FakeQueue();
+    const created = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: null,
+      headers: {},
+      payload: { type: "transfer.created", transferId: "tr_ambiguous" },
+      payloadSha256: "e".repeat(64),
+    });
+    await store.updateEvent(created.event.id, { status: "dead_letter", attemptCount: 1 });
+    await store.addAttempt({
+      eventId: created.event.id,
+      mode: "live",
+      destinationUrl: "https://example.com/hook",
+      statusCode: null,
+      responseBody: null,
+      error: "connection reset after request write",
+      durationMs: 800,
+    });
+    await store.addRehearsal({
+      eventId: created.event.id,
+      payloadSha256: "e".repeat(64),
+      destinationUrl: "https://example.com/hook",
+      passed: true,
+      statusCode: 204,
+      notes: "receiver repaired",
+    });
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+    const base = {
+      method: "POST" as const,
+      url: `/api/events/${created.event.id}/replay`,
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}`, "content-type": "application/json", "x-operator": "commander" },
+    };
+    const payload = { destinationUrl: "https://example.com/hook", reason: "Receiver owner confirmed the repair" };
+
+    const blocked = await app.inject({ ...base, payload });
+    const approved = await app.inject({ ...base, payload: { ...payload, acknowledgeRisk: true } });
+
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().reasons).toContain("Explicitly acknowledge the duplicate-side-effect risk before replaying");
+    expect(approved.statusCode).toBe(202);
+    expect(queue.jobs).toHaveLength(1);
+    expect(store.audit).toMatchObject([
+      { action: "replay.blocked", metadata: { riskLevel: "high", riskAcknowledged: false } },
+      { action: "replay.approved", metadata: { riskLevel: "high", riskAcknowledged: true } },
+    ]);
+
+    const detail = await app.inject({ method: "GET", url: `/api/events/${created.event.id}`, headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` } });
+    expect(detail.json().replayRisk).toMatchObject({ level: "high", requiresAcknowledgement: true });
+  });
+
   it("reports the live service fabric without exposing it publicly", async () => {
     const queue = new FakeQueue();
     const store = new FakeStore();

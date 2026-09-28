@@ -54,6 +54,12 @@ A rehearsal sends the original payload with `x-replay-room-mode: rehearsal` to a
 
 Production replay requires a passing record with the same payload digest and destination. This intentionally makes target changes force a new rehearsal.
 
+## Duplicate-side-effect risk
+
+Before approval, Replay Room derives a deterministic risk assessment from the production attempt transcript. Missing idempotency evidence, a network attempt with no HTTP response, or a prior 2xx response is high risk because receiver-side acceptance may already have happened. Multiple attempts, throttling, and 5xx responses are elevated risk. A stable idempotency key plus only permanent 4xx rejections is low risk.
+
+High risk does not make replay impossible, because the system cannot know every receiver's side-effect semantics. It makes the uncertainty explicit: the operator must acknowledge it, and the decision, risk level, and acknowledgement are written to the audit trail and signed evidence bundle.
+
 ## Recovery
 
 The reconciler runs every ten minutes. It re-dispatches pending or stale delivery intents with the same BullMQ job key, synthesizes a recovery intent only for legacy/orphaned queued records that have no open intent, and deletes event records past the configured retention window. Queue dispatch uses a five-minute lease so concurrent reconcilers cannot independently own the same intent. The Postgres ledger remains authoritative; Redis is disposable transport, not the system of record.

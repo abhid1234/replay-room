@@ -5,7 +5,7 @@
   "description": "A portable, tamper-evident transcript of one webhook incident.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "generatedAt", "event", "diagnosis", "attempts", "rehearsals", "audit", "integrity"],
+  "required": ["schemaVersion", "generatedAt", "event", "diagnosis", "replayRisk", "attempts", "rehearsals", "audit", "integrity"],
   "properties": {
     "schemaVersion": { "const": "replay-room.evidence/v1" },
     "generatedAt": { "type": "string", "format": "date-time" },
@@ -42,6 +42,30 @@
         "summary": { "type": "string", "minLength": 1 },
         "evidence": { "type": "array", "items": { "type": "string" } },
         "nextAction": { "type": "string", "minLength": 1 }
+      }
+    },
+    "replayRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "requiresAcknowledgement", "headline", "summary", "signals"],
+      "properties": {
+        "level": { "enum": ["low", "elevated", "high"] },
+        "requiresAcknowledgement": { "type": "boolean" },
+        "headline": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "severity", "message"],
+            "properties": {
+              "code": { "enum": ["missing_idempotency_key", "ambiguous_network_outcome", "prior_success", "multiple_attempts", "transient_receiver_failure", "known_rejection"] },
+              "severity": { "enum": ["low", "elevated", "high"] },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       }
     },
     "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } },

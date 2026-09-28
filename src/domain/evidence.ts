@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { diagnoseEvent } from "./diagnosis.js";
+import { assessReplayRisk } from "./replay-risk.js";
 import type { EventDetail } from "./types.js";
 
 const isoDate = z.string().datetime({ offset: true });
@@ -65,6 +66,17 @@ export const evidenceBundleSchema = z.object({
     evidence: z.array(z.string()),
     nextAction: z.string().min(1),
   }).strict(),
+  replayRisk: z.object({
+    level: z.enum(["low", "elevated", "high"]),
+    requiresAcknowledgement: z.boolean(),
+    headline: z.string().min(1),
+    summary: z.string().min(1),
+    signals: z.array(z.object({
+      code: z.enum(["missing_idempotency_key", "ambiguous_network_outcome", "prior_success", "multiple_attempts", "transient_receiver_failure", "known_rejection"]),
+      severity: z.enum(["low", "elevated", "high"]),
+      message: z.string().min(1),
+    }).strict()),
+  }).strict(),
   attempts: z.array(attemptSchema),
   rehearsals: z.array(rehearsalSchema),
   audit: z.array(auditSchema),
@@ -104,6 +116,7 @@ export function createEvidenceBundle(
       updatedAt: detail.updatedAt,
     },
     diagnosis: diagnoseEvent(detail),
+    replayRisk: assessReplayRisk(detail),
     attempts: detail.attempts,
     rehearsals: detail.rehearsals,
     audit: detail.audit,

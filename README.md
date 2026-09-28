@@ -48,7 +48,7 @@ npx @avee1234/replay-room inspect ./incident.evidence.json
 EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npx @avee1234/replay-room verify ./incident.evidence.json
 ```
 
-The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident fixtures, and the CLI. Publication remains human-gated; this repository does not claim that the package is already on npm.
+The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. Publication remains human-gated; this repository does not claim that the package is already on npm.
 
 The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
 
@@ -83,8 +83,9 @@ A replay is accepted only when all of these are true:
 3. The latest rehearsal succeeded.
 4. The event payload hash still matches the rehearsed hash.
 5. The production replay destination exactly matches the rehearsed destination.
+6. If prior receiver acceptance is ambiguous or no idempotency key exists, the operator explicitly acknowledges the duplicate-side-effect risk.
 
-Every approval and rejection is written to the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
+Every approval and rejection records the risk level and acknowledgement in the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
 ## Quick start
 

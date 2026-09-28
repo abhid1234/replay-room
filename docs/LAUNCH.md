@@ -27,6 +27,8 @@ The replay guard then checks dead-letter state, operator identity, a meaningful 
 
 The result is intentionally inconvenient in one useful way: changing the target or payload invalidates the previous proof. The operator must rehearse again.
 
+Replay Room also asks whether the receiver may already have acted. A missing idempotency key, a connection failure without an HTTP response, or a prior success response produces a high duplicate-side-effect risk. The console explains the exact signals and requires explicit acknowledgement before the guard can approve the replay. The system does not pretend ambiguity is certainty; it makes the operator own the residual risk.
+
 ## Portable incident evidence
 
 An incident should remain understandable after the dashboard closes. Replay Room exports a versioned JSON bundle containing the event identity, diagnosis, attempts, rehearsals, and audit history. The server canonicalizes that content, records its SHA-256 digest, and seals it with HMAC-SHA256.
@@ -60,7 +62,7 @@ The repository ships more than a UI:
 
 - a versioned OpenAPI 3.1 contract;
 - a strict runtime schema and public JSON Schema for evidence bundles;
-- five synthetic incident fixtures covering outages, throttling, contract rejection, network failure, and active recovery;
+- six synthetic incident fixtures covering outages, throttling, contract rejection, network failure, active recovery, and an ambiguous payment without idempotency evidence;
 - seven replay-guard conformance cases, including payload and destination drift;
 - unit and API tests, plus CI against real Postgres 17 and Redis 8 service containers;
 - dependency audit, CodeQL, a clean container build, package-content checks, registry integrity checks, a CycloneDX SBOM, and provenance-ready release automation;

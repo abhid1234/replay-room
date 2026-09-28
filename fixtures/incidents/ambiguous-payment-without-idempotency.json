@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-09-27T18:10:00.000Z",
+  "event": {
+    "id": "3da1ae64-b04b-4ac0-858d-2900d1cd3229",
+    "endpointId": "ba7ecef7-c2c9-49ca-9c9e-0285a74d4328",
+    "idempotencyKey": null,
+    "headers": { "content-type": "application/json" },
+    "payload": { "type": "payment.captured", "paymentId": "pay_synthetic_ambiguous" },
+    "payloadSha256": "abababababababababababababababababababababababababababababababab",
+    "status": "dead_letter",
+    "attemptCount": 1,
+    "lastError": "Connection reset after request body was written",
+    "receivedAt": "2026-09-27T18:00:00.000Z",
+    "updatedAt": "2026-09-27T18:00:02.000Z",
+    "endpoint": {
+      "id": "ba7ecef7-c2c9-49ca-9c9e-0285a74d4328",
+      "name": "Synthetic payments receiver",
+      "ingestKey": "fixture_ambiguous_key",
+      "destinationUrl": "https://receiver.example/webhooks/payments",
+      "signingSecret": null,
+      "maxAttempts": 1,
+      "createdAt": "2026-09-27T11:00:00.000Z"
+    },
+    "attempts": [
+      {
+        "id": "2e5ba738-a1ef-4648-ad43-aa79e01acf04",
+        "eventId": "3da1ae64-b04b-4ac0-858d-2900d1cd3229",
+        "mode": "live",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "statusCode": null,
+        "responseBody": null,
+        "error": "ECONNRESET after request write",
+        "durationMs": 1200,
+        "createdAt": "2026-09-27T18:00:02.000Z"
+      }
+    ],
+    "rehearsals": [],
+    "audit": []
+  }
+}

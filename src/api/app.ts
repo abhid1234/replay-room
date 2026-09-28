@@ -9,6 +9,7 @@ import type { DeliveryQueue, Store } from "../domain/contracts.js";
 import { diagnoseEvent } from "../domain/diagnosis.js";
 import { createEvidenceBundle } from "../domain/evidence.js";
 import { evaluateReplay } from "../domain/replay-guard.js";
+import { assessReplayRisk } from "../domain/replay-risk.js";
 import { assertSafeDestination, redactHeaders, sha256, UnsafeDestinationError, verifySignature } from "../domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../domain/system.js";
 import type { Endpoint } from "../domain/types.js";
@@ -36,6 +37,7 @@ const rehearsalSchema = z.object({
 const replaySchema = z.object({
   destinationUrl: z.string().url(),
   reason: z.string().trim().min(10).max(500),
+  acknowledgeRisk: z.boolean().default(false),
 });
 
 export async function buildApp({ config, store, queue }: Dependencies): Promise<FastifyInstance> {
@@ -170,7 +172,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
-    return { ...event, endpoint: endpointView(event.endpoint), diagnosis: diagnoseEvent(event) };
+    return { ...event, endpoint: endpointView(event.endpoint), diagnosis: diagnoseEvent(event), replayRisk: assessReplayRisk(event) };
   });
 
   app.get("/api/events/:id/evidence", { preHandler: adminGuard(config) }, async (request, reply) => {
@@ -211,14 +213,20 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     if (!event) return reply.code(404).send({ error: "Event not found" });
     const rehearsal = await store.latestPassingRehearsal(id);
     const actor = actorFrom(request.headers);
-    const decision = evaluateReplay(event, rehearsal, { actor, reason: input.reason, destinationUrl: input.destinationUrl });
+    const risk = assessReplayRisk(event);
+    const decision = evaluateReplay(event, rehearsal, {
+      actor,
+      reason: input.reason,
+      destinationUrl: input.destinationUrl,
+      acknowledgeRisk: input.acknowledgeRisk,
+    }, risk);
     if (!decision.allowed) {
       await store.addAudit({
         eventId: id,
         action: "replay.blocked",
         actor,
         reason: input.reason,
-        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons },
+        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons, riskLevel: risk.level, riskAcknowledged: input.acknowledgeRisk },
       });
       return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
     }
@@ -243,6 +251,8 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         guardReasons: decision.reasons,
         deliveryIntentId: scheduled.intent.id,
         jobKey,
+        riskLevel: risk.level,
+        riskAcknowledged: input.acknowledgeRisk,
       },
     });
     if (scheduled.intent.state !== "completed") {

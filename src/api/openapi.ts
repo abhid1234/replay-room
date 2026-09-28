@@ -12,7 +12,7 @@ export const openApiDocument = {
     title: "Replay Room API",
     version: "0.1.0",
     summary: "Capture, diagnose, rehearse, and safely replay webhook incidents.",
-    description: "Public ingest is separated from bearer-protected operator endpoints. Replays require passing rehearsal evidence bound to the exact payload digest and destination.",
+    description: "Public ingest is separated from bearer-protected operator endpoints. Replays require passing rehearsal evidence bound to the exact payload digest and destination, plus explicit acknowledgement when receiver acceptance is ambiguous.",
     license: { name: "MIT", identifier: "MIT" },
   },
   externalDocs: { url: "https://github.com/abhid1234/replay-room", description: "Source, architecture, fixtures, and deployment guide" },
@@ -117,9 +117,9 @@ export const openApiDocument = {
         lastError: { type: ["string", "null"] }, receivedAt: dateTime, updatedAt: dateTime,
       }),
       EventList: { type: "array", items: { $ref: "#/components/schemas/WebhookEvent" } },
-      EventDetail: { allOf: [{ $ref: "#/components/schemas/WebhookEvent" }, object(["endpoint", "attempts", "rehearsals", "audit", "diagnosis"], {
+      EventDetail: { allOf: [{ $ref: "#/components/schemas/WebhookEvent" }, object(["endpoint", "attempts", "rehearsals", "audit", "diagnosis", "replayRisk"], {
         endpoint: { $ref: "#/components/schemas/Endpoint" }, attempts: { type: "array", items: { type: "object" } },
-        rehearsals: { type: "array", items: { type: "object" } }, audit: { type: "array", items: { type: "object" } }, diagnosis: { type: "object" },
+        rehearsals: { type: "array", items: { type: "object" } }, audit: { type: "array", items: { type: "object" } }, diagnosis: { type: "object" }, replayRisk: { type: "object" },
       })] },
       DashboardStats: object(["total", "queued", "delivered", "retrying", "deadLetter", "deliveryRate"], {
         total: nonnegativeInteger, queued: nonnegativeInteger, delivered: nonnegativeInteger, retrying: nonnegativeInteger, deadLetter: nonnegativeInteger, deliveryRate: { type: "number", minimum: 0, maximum: 100 },
@@ -127,7 +127,11 @@ export const openApiDocument = {
       SystemSnapshot: { type: "object" },
       EndpointReliabilityList: { type: "array", items: { type: "object" } },
       RehearsalRequest: object(["destinationUrl"], { destinationUrl: uri, notes: { type: "string", maxLength: 500 } }),
-      ReplayRequest: object(["destinationUrl", "reason"], { destinationUrl: uri, reason: { type: "string", minLength: 10, maxLength: 500 } }),
+      ReplayRequest: object(["destinationUrl", "reason"], {
+        destinationUrl: uri,
+        reason: { type: "string", minLength: 10, maxLength: 500 },
+        acknowledgeRisk: { type: "boolean", default: false, description: "Required when replay risk is high because prior receiver acceptance is ambiguous or no idempotency key exists" },
+      }),
       ActionReceipt: object(["queued", "eventId", "mode", "deliveryIntentId"], {
         queued: { const: true }, eventId: uuid, mode: { enum: ["rehearsal", "replay"] }, deliveryIntentId: uuid, duplicate: { type: "boolean" },
       }),

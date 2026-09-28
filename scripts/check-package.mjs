@@ -58,6 +58,7 @@ try {
     eventId: fixture.event.id,
     status: "dead_letter",
     diagnosis: "receiver_outage",
+    replayRisk: "elevated",
     attempts: 3,
     rehearsals: 0,
     auditEntries: 1,

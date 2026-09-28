@@ -22,6 +22,7 @@ for (const fixtureCase of manifest.cases) {
   const parsed = parseEvidenceBundle(bundle);
 
   assert.equal(parsed.diagnosis.code, fixtureCase.expectedDiagnosis, `${fixtureCase.id}: diagnosis drifted`);
+  assert.equal(parsed.replayRisk.level, fixtureCase.expectedRisk, `${fixtureCase.id}: replay risk drifted`);
   assert.equal(verifyEvidenceBundle(parsed, fixtureSecret), true, `${fixtureCase.id}: valid seal rejected`);
 
   const tampered = structuredClone(parsed);
@@ -43,6 +44,7 @@ for (const guardCase of guardFixture.cases) {
 console.log(JSON.stringify({
   conformance: "passed",
   incidentCases: manifest.cases.length,
+  replayRiskCases: manifest.cases.length,
   replayGuardCases: guardFixture.cases.length,
   schemaVersion: "replay-room.evidence/v1",
 }));

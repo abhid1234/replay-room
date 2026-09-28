@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
+import { assessReplayRisk } from "../src/domain/replay-risk.js";
 import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
 import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, verifySignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
-import type { Rehearsal, WebhookEvent } from "../src/domain/types.js";
+import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
 const event: WebhookEvent = {
   id: "3a553dce-f3c5-4da7-a612-857389682d06", endpointId: "6d1bda7a-8615-4c03-8095-3600e826f0f7",
@@ -29,6 +30,28 @@ describe("replay guard", () => {
     expect(decision.allowed).toBe(false);
     expect(decision.reasons).toContain("The payload changed after rehearsal");
     expect(decision.reasons).toContain("The destination changed after rehearsal");
+  });
+  it("requires explicit acknowledgement when receiver acceptance is ambiguous", () => {
+    const risk = assessReplayRisk(detailWithAttempts([
+      { id: "network-1", eventId: event.id, mode: "live", destinationUrl: rehearsal.destinationUrl, statusCode: null, responseBody: null, error: "socket closed", durationMs: 500, createdAt: event.updatedAt },
+    ], null));
+    const denied = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl }, risk);
+    const accepted = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true }, risk);
+
+    expect(risk).toMatchObject({ level: "high", requiresAcknowledgement: true });
+    expect(denied.reasons).toContain("Explicitly acknowledge the duplicate-side-effect risk before replaying");
+    expect(accepted).toEqual({ allowed: true, reasons: [] });
+  });
+});
+
+describe("replay risk", () => {
+  it("keeps a known permanent rejection with idempotency evidence low risk", () => {
+    const risk = assessReplayRisk(detailWithAttempts([
+      { id: "reject-1", eventId: event.id, mode: "live", destinationUrl: rehearsal.destinationUrl, statusCode: 422, responseBody: "invalid", error: null, durationMs: 20, createdAt: event.updatedAt },
+    ], "checkout-1"));
+
+    expect(risk).toMatchObject({ level: "low", requiresAcknowledgement: false, headline: "Replay risk is bounded" });
+    expect(risk.signals.map((signal) => signal.code)).toEqual(["known_rejection"]);
   });
 });
 
@@ -159,3 +182,22 @@ describe("endpoint reliability", () => {
     expect(deliveryRate(2, 1)).toBe(66.7);
   });
 });
+
+function detailWithAttempts(attempts: EventDetail["attempts"], idempotencyKey: string | null): EventDetail {
+  return {
+    ...event,
+    idempotencyKey,
+    endpoint: {
+      id: event.endpointId,
+      name: "Billing",
+      ingestKey: "hook_test_123456",
+      destinationUrl: rehearsal.destinationUrl,
+      signingSecret: null,
+      maxAttempts: 5,
+      createdAt: event.receivedAt,
+    },
+    attempts,
+    rehearsals: [rehearsal],
+    audit: [],
+  };
+}
