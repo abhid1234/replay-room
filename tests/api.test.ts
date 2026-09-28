@@ -89,6 +89,26 @@ describe("webhook API", () => {
     });
   });
 
+  it("allows the configured operator console to preflight authenticated reads", async () => {
+    const app = await buildApp({ config, store: new FakeStore(), queue: new FakeQueue() });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/api/stats",
+      headers: {
+        origin: config.WEB_ORIGIN,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(config.WEB_ORIGIN);
+    expect(response.headers["access-control-allow-methods"]).toContain("GET");
+    expect(response.headers["access-control-allow-headers"]).toContain("authorization");
+  });
+
   it("accepts once, persists before enqueue, and deduplicates retries", async () => {
     const store = new FakeStore();
     const queue = new FakeQueue();

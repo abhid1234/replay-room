@@ -1,0 +1,36 @@
+name: live deployment smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Public Replay Room API origin
+        required: true
+        type: string
+      site_url:
+        description: Public Replay Room console origin
+        required: true
+        type: string
+      expected_version:
+        description: Expected deployed OpenAPI version
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    env:
+      API_URL: ${{ inputs.api_url }}
+      SITE_URL: ${{ inputs.site_url }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Verify live Render deployment
+        run: npm run smoke:live -- --api "$API_URL" --site "$SITE_URL" --expected-version "$EXPECTED_VERSION"
