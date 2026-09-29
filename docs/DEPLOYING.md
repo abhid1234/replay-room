@@ -51,6 +51,15 @@ Both public ingest and operator routes use Redis-backed distributed limits. `ING
 
 `SIGNATURE_TOLERANCE_SECONDS` controls the allowed Stripe webhook timestamp skew and defaults to 300 seconds. Keep host time synchronized; do not increase this window merely to work around clock drift.
 
+## Verified public deployment
+
+The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live from commit `43cca36`:
+
+- console: <https://replay-room-web.onrender.com>
+- API: <https://replay-room-api.onrender.com>
+
+On 2026-09-28, `npm run smoke:live` passed against both public origins. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.1.1` with all nine required routes, a mounted console, and the exact cross-origin policy required by that console.
+
 ## Production upgrade
 
 For continuous delivery processing, move the queue consumer and reconciler out of the web service:

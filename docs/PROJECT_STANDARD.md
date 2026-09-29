@@ -4,10 +4,10 @@ AgentRoute is the benchmark for launch completeness: product, public proof, pack
 
 | Surface | Replay Room artifact | Current state | Exit evidence |
 |---|---|---|---|
-| Product | Fastify API, BullMQ delivery engine, Postgres ledger, React operator console | Implemented and locally verified | `npm run verify` |
-| Playground | Public outage drill and live incident console on Render | Build-ready; public URL pending | Public URL plus cold-start and drill smoke test |
+| Product | Fastify API, BullMQ delivery engine, Postgres ledger, React operator console | Implemented, locally verified, and deployed on Render | `npm run verify` plus the live deployment gate |
+| Playground | [Public outage drill and live incident console](https://replay-room-web.onrender.com) on Render | Live; deployment gate passed on 2026-09-28 | Public URL, live dependency health, OpenAPI, console, and CORS verification |
 | GitHub | `abhid1234/replay-room` | Public repository with required verification workflows | `main` contains the release candidate and required checks pass |
-| Product site | Render static site | Blueprint-ready; public URL pending | Public landing page with architecture and links |
+| Product site | [Render static site](https://replay-room-web.onrender.com) | Live from the `main` Blueprint | Public landing page with architecture and links |
 | npm | `@avee1234/replay-room` library and CLI | Name unclaimed; package gate passes; not published | Provenance-bearing registry version and install smoke test |
 | Release | [v0.1.1](https://github.com/abhid1234/replay-room/releases/tag/v0.1.1) | Published from `90af27d`; tarball and CycloneDX SBOM hashes match the release metadata; SLSA provenance and CycloneDX attestations verify | Public release, tarball, SBOM, and signed attestations |
 | Fixtures | Synthetic incident corpus, conformance runner, and Hugging Face dataset bundle | Six incident/risk cases and seven replay-guard cases implemented; deterministic dataset card, JSONL configurations, hashes, and upload/readback procedure ready | Public dataset mirror with readback verification |
