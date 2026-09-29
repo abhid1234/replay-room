@@ -3,6 +3,8 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
+[Live console](https://replay-room-web.onrender.com) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json)
+
 **Rehearse a failed webhook before you replay it.**
 
 Replay Room is an operator console for the dangerous moment after an event lands in a dead-letter queue. It preserves the original payload, records every delivery attempt, requires a successful rehearsal against the exact destination and payload hash, and only then allows an audited replay.
@@ -74,7 +76,6 @@ The root [render.yaml](render.yaml) creates the free lab topology as one Bluepri
 | Free web service | Public ingest, admin API, queue consumer, and reconciliation loop |
 | Postgres | Durable event, delivery-intent, attempt, rehearsal, and audit ledger |
 | Key Value | Disposable BullMQ transport, delayed retries, heartbeats, and rate limits |
-| Preview environment | Disposable full-stack environment for PR testing |
 
 The free topology is honest about its constraints: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
 
@@ -176,6 +177,8 @@ After a Render Blueprint is live, one command produces machine-readable deployme
 npm run smoke:live -- --api https://YOUR-API.onrender.com --site https://YOUR-CONSOLE.onrender.com
 ```
 
+The current public deployment passed this gate on 2026-09-28 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all nine required OpenAPI paths, the mounted console, and the console's exact CORS policy.
+
 GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
 
 ## Interview walkthrough
@@ -191,7 +194,7 @@ GitHub Actions runs the same gate on every branch push and pull request, exercis
 
 ## Status
 
-Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. It is ready for local verification and a first free Render Blueprint deployment; it is not represented as a production-tested managed service, a published npm package, or a currently live public deployment.
+Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passed the repository's end-to-end deployment gate on commit `43cca36`. It remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
 
 ## License
 

@@ -70,6 +70,6 @@ The repository ships more than a UI:
 - dependency audit, CodeQL, a clean container build, package-content checks, registry integrity checks, a CycloneDX SBOM, and provenance-ready release automation;
 - Mermaid, SVG, PNG, and editable Excalidraw architecture assets.
 
-The public outage drill is still a simulation. The managed-service proof is still CI until the Render Blueprint is activated and its live URLs are reopened. Replay Room says those things plainly because operational software should be most precise when the demo is easiest to oversell.
+The public outage drill is still a simulation, but the surrounding system is not a mock deployment. The free Render Blueprint is live at [replay-room-web.onrender.com](https://replay-room-web.onrender.com), and the repository's live gate reopened both public origins and verified real Postgres and Key Value health, the versioned OpenAPI surface, the mounted console, and exact CORS behavior. Replay Room says which layer is simulated because operational software should be most precise when the demo is easiest to oversell.
 
 The project starts with one question: before you press replay, what can you prove?
