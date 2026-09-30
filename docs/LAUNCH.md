@@ -64,7 +64,7 @@ The repository ships more than a UI:
 
 - a versioned OpenAPI 3.1 contract;
 - a strict runtime schema and public JSON Schema for evidence bundles;
-- six synthetic incident fixtures covering outages, throttling, contract rejection, network failure, active recovery, and an ambiguous payment without idempotency evidence;
+- a public [Hugging Face dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures) with six synthetic incident fixtures covering outages, throttling, contract rejection, network failure, active recovery, and an ambiguous payment without idempotency evidence;
 - seven replay-guard conformance cases, including payload and destination drift;
 - unit and API tests, plus CI against real Postgres 17 and Redis 8 service containers;
 - dependency audit, CodeQL, a clean container build, package-content checks, registry integrity checks, a CycloneDX SBOM, and provenance-ready release automation;
