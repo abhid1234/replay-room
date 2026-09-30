@@ -33,3 +33,9 @@ hf download abhid1234/replay-room-fixtures dataset-manifest.json \
 ```
 
 Compare the downloaded manifest with `fixtures/huggingface/dataset-manifest.json` before marking the mirror live.
+
+## Verified public mirror
+
+The public dataset is live at <https://huggingface.co/datasets/abhid1234/replay-room-fixtures>. The initial dataset commit is `9e343c2930f2dd6a3b795cc58df99224c685da23`.
+
+On 2026-09-29, a fresh download reproduced all four prepared files byte-for-byte. An unauthenticated download of `dataset-manifest.json` produced SHA-256 `c37ad0cab7e5dc2d34c6a526cf8fa20acea613640817e756a33108b062a29fac`, matching the checked-in manifest.
