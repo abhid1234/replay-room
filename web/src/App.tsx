@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IncidentDrill } from "./IncidentDrill";
+import { startAuthorizedPolling, type PollResult } from "./polling";
 
 type EventStatus = "queued" | "delivering" | "retrying" | "delivered" | "dead_letter";
 type Event = {
@@ -64,6 +65,12 @@ type Detail = Event & {
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 export function App() {
   const [token, setToken] = useState(() => localStorage.getItem("replay-room-token") || "");
   const [events, setEvents] = useState<Event[]>([]);
@@ -82,12 +89,12 @@ export function App() {
       headers: { "content-type": "application/json", ...auth, ...(init.headers || {}) },
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+    if (!response.ok) throw new ApiRequestError(body.error || `HTTP ${response.status}`, response.status);
     return body as T;
   }, [auth]);
 
-  const refresh = useCallback(async (silent = false) => {
-    if (!token) return;
+  const refresh = useCallback(async (silent = false): Promise<PollResult> => {
+    if (!token) return "unauthorized";
     if (!silent) setBusy(true);
     try {
       const [nextStats, nextEvents, nextEndpoints, nextReliability, nextSystem] = await Promise.all([
@@ -96,16 +103,16 @@ export function App() {
       setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setReliability(nextReliability); setSystem(nextSystem);
       localStorage.setItem("replay-room-token", token);
       setMessage(`Connected to ${API_BASE}`);
+      return "ok";
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load Replay Room");
+      return error instanceof ApiRequestError && error.status === 401 ? "unauthorized" : "retryable";
     } finally { if (!silent) setBusy(false); }
   }, [request, token]);
 
   useEffect(() => {
     if (!token) return;
-    void refresh();
-    const timer = window.setInterval(() => void refresh(true), 5_000);
-    return () => window.clearInterval(timer);
+    return startAuthorizedPolling(refresh);
   }, [refresh, token]);
 
   const openEvent = async (id: string) => {
