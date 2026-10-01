@@ -203,6 +203,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       expect(observedLockWait).toBe(true);
       if (claim.status !== "claimed" || !claim.intent.processingAt) throw new Error("Expected a claimed intent");
       expect(Date.parse(claim.intent.processingAt)).toBeGreaterThanOrEqual(releasedAt);
+      await store.completeDeliveryIntent(intent.intent.id, new Date().toISOString(), claim.intent.processingAt);
     } finally {
       try {
         await blocker.query("ROLLBACK");
