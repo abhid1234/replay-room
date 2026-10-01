@@ -1,15 +1,17 @@
 import type { DeliveryJob, DeliveryQueue, DeliveryResult, Store } from "./domain/contracts.js";
 import { isRetryableStatus, retryDelayMs } from "./domain/retry.js";
-import { assertSafeResolvedDestination, type DestinationLookup, signWebhookPayload, UnsafeDestinationError } from "./domain/security.js";
+import { resolveSafeDestination, type DestinationLookup, signWebhookPayload, UnsafeDestinationError } from "./domain/security.js";
 import { deliveryJobKey, dispatchDeliveryIntent } from "./dispatch.js";
+import { postPinnedDestination, type DestinationPost } from "./outbound-http.js";
 
 interface DeliveryDependencies {
   store: Store;
   queue: DeliveryQueue;
   allowPrivateTargets: boolean;
-  fetchFn?: typeof fetch;
+  postFn?: DestinationPost;
   lookupFn?: DestinationLookup;
   now?: () => number;
+  timeoutMs?: number;
 }
 
 export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Promise<DeliveryResult> {
@@ -42,7 +44,8 @@ async function deliverClaimed(
 
   const destinationInput = job.destinationUrl ?? detail.endpoint.destinationUrl;
   let destination = safeDestinationLabel(destinationInput);
-  const fetchFn = deps.fetchFn ?? fetch;
+  const postFn = deps.postFn ?? postPinnedDestination;
+  const timeoutMs = deps.timeoutMs ?? 10_000;
   const nextAttempt = detail.attemptCount + 1;
   const deliveryAttempt = job.attemptNumber ?? nextAttempt;
   const startedAt = now();
@@ -61,9 +64,18 @@ async function deliverClaimed(
     : {};
 
   try {
-    destination = (await assertSafeResolvedDestination(destinationInput, deps.allowPrivateTargets, deps.lookupFn)).toString();
-    const response = await fetchFn(destination, {
-      method: "POST",
+    const networkStartedAt = performance.now();
+    const resolutionController = new AbortController();
+    const resolved = await withTimeout(
+      resolveSafeDestination(destinationInput, deps.allowPrivateTargets, deps.lookupFn, resolutionController.signal),
+      timeoutMs,
+      `Destination resolution timed out after ${timeoutMs}ms`,
+      () => resolutionController.abort(),
+    );
+    destination = resolved.url.toString();
+    const remainingTimeoutMs = Math.max(1, timeoutMs - Math.ceil(performance.now() - networkStartedAt));
+    const response = await postFn({
+      destination: resolved,
       headers: {
         "content-type": "application/json",
         "user-agent": "Replay-Room/0.1",
@@ -73,10 +85,10 @@ async function deliverClaimed(
         ...signatureHeaders,
       },
       body,
-      signal: AbortSignal.timeout(10_000),
+      timeoutMs: remainingTimeoutMs,
     });
     statusCode = response.status;
-    responseBody = (await response.text()).slice(0, 4_096);
+    responseBody = response.body;
   } catch (error) {
     unsafeDestination = error instanceof UnsafeDestinationError;
     errorMessage = error instanceof Error ? error.message : "Unknown delivery error";
@@ -180,5 +192,25 @@ function safeDestinationLabel(rawUrl: string): string {
     return url.toString();
   } catch {
     return "[invalid destination]";
+  }
+}
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+  onTimeout?: () => void,
+): Promise<T> {
+  let deadline: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    deadline = setTimeout(() => {
+      reject(new Error(message));
+      onTimeout?.();
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (deadline) clearTimeout(deadline);
   }
 }

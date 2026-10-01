@@ -7,7 +7,7 @@ import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
-import { assertSafeDestination, assertSafeResolvedDestination, redactHeaders, sha256, signPayload, signWebhookPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
+import { assertSafeDestination, createDestinationLookup, redactHeaders, resolveSafeDestination, sha256, signPayload, signWebhookPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
 
@@ -108,19 +108,109 @@ describe("security helpers", () => {
     expect(() => assertSafeDestination("http://127.0.0.1:4000", false)).toThrow("Private-network");
     expect(() => assertSafeDestination("https://[::1]/hook", false)).toThrow("Private-network");
     expect(() => assertSafeDestination("https://[fd00::1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[::ffff:7f00:1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[ff02::1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[64:ff9b::7f00:1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[100::1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[2001:2::1]/hook", false)).toThrow("Private-network");
+    expect(() => assertSafeDestination("https://[3fff::1]/hook", false)).toThrow("Private-network");
     expect(assertSafeDestination("https://example.com/hook", false).hostname).toBe("example.com");
+    expect(assertSafeDestination("https://[2606:4700:4700::1111]/hook", false).hostname).toBe("[2606:4700:4700::1111]");
   });
   it("blocks public hostnames that resolve into private networks", async () => {
-    await expect(assertSafeResolvedDestination(
+    await expect(resolveSafeDestination(
       "https://hooks.example/deliver",
       false,
       async () => [{ address: "10.42.0.8", family: 4 }],
     )).rejects.toThrow("private or reserved network");
-    await expect(assertSafeResolvedDestination(
+    await expect(resolveSafeDestination(
       "https://hooks.example/deliver",
       false,
       async () => [{ address: "93.184.216.34", family: 4 }],
-    )).resolves.toMatchObject({ hostname: "hooks.example" });
+    )).resolves.toMatchObject({ url: expect.objectContaining({ hostname: "hooks.example" }) });
+  });
+  it("returns the validated address that the HTTP client must pin", async () => {
+    await expect(resolveSafeDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [{ address: "93.184.216.34", family: 4 }],
+    )).resolves.toMatchObject({
+      addresses: [{ address: "93.184.216.34", family: 4 }],
+    });
+  });
+  it("rejects mixed public and private DNS answers instead of pinning selectively", async () => {
+    await expect(resolveSafeDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [
+        { address: "93.184.216.34", family: 4 },
+        { address: "127.0.0.1", family: 4 },
+      ],
+    )).rejects.toThrow("private or reserved network");
+  });
+  it("rejects DNS answers that encode private IPv4 space as IPv6", async () => {
+    await expect(resolveSafeDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [{ address: "::ffff:7f00:1", family: 6 }],
+    )).rejects.toThrow("private or reserved network");
+  });
+  it("rejects empty and malformed DNS result sets", async () => {
+    await expect(resolveSafeDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [],
+    )).rejects.toThrow("did not resolve");
+    await expect(resolveSafeDestination(
+      "https://hooks.example/deliver",
+      false,
+      async () => [
+        { address: "93.184.216.34", family: 4 },
+        { address: "not-an-ip", family: 4 },
+      ],
+    )).rejects.toThrow("invalid address");
+  });
+  it("cancels both underlying DNS queries when resolution is aborted", async () => {
+    let cancelCalls = 0;
+    let rejectIpv4!: (reason: Error) => void;
+    let rejectIpv6!: (reason: Error) => void;
+    const lookup = createDestinationLookup(() => ({
+      resolve4: async () => new Promise<string[]>((_resolve, reject) => { rejectIpv4 = reject; }),
+      resolve6: async () => new Promise<string[]>((_resolve, reject) => { rejectIpv6 = reject; }),
+      cancel: () => {
+        cancelCalls += 1;
+        const error = Object.assign(new Error("query cancelled"), { code: "ECANCELLED" });
+        rejectIpv4(error);
+        rejectIpv6(error);
+      },
+    }));
+    const controller = new AbortController();
+    const pending = lookup("hooks.example", controller.signal);
+
+    controller.abort();
+
+    await expect(pending).rejects.toThrow("Destination resolution was cancelled");
+    expect(cancelCalls).toBe(1);
+  });
+  it("preserves a successful address family when the other DNS query fails", async () => {
+    const dnsFailure = Object.assign(new Error("temporary DNS failure"), { code: "ESERVFAIL" });
+    const ipv4Lookup = createDestinationLookup(() => ({
+      resolve4: async () => ["93.184.216.34"],
+      resolve6: async () => Promise.reject(dnsFailure),
+      cancel: () => undefined,
+    }));
+    const ipv6Lookup = createDestinationLookup(() => ({
+      resolve4: async () => Promise.reject(dnsFailure),
+      resolve6: async () => ["2606:4700:4700::1111"],
+      cancel: () => undefined,
+    }));
+
+    await expect(ipv4Lookup("hooks.example")).resolves.toEqual([
+      { address: "93.184.216.34", family: 4 },
+    ]);
+    await expect(ipv6Lookup("hooks.example")).resolves.toEqual([
+      { address: "2606:4700:4700::1111", family: 6 },
+    ]);
   });
 });
 

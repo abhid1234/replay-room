@@ -58,7 +58,7 @@ The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live from commit `43cc
 - console: <https://replay-room-web.onrender.com>
 - API: <https://replay-room-api.onrender.com>
 
-On 2026-09-28, `npm run smoke:live` passed against both public origins. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.1.1` with all nine required routes, a mounted console, and the exact cross-origin policy required by that console.
+On 2026-09-30, `npm run smoke:live` passed across the Render API, Render console, and Hugging Face demo. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.1.1` with all ten required routes, a mounted console, the exact cross-origin policy required by that console, and a credential-free Space bundle with its four proof links.
 
 ## Production upgrade
 
@@ -70,7 +70,7 @@ For continuous delivery processing, move the queue consumer and reconciler out o
 - paid Postgres with backups and an explicit retention policy;
 - persistent paid Key Value;
 - organization-scoped authentication and secret management;
-- egress enforcement or DNS pinning to close the lookup-to-connect rebinding window.
+- external egress allowlists as defense in depth around the application-level DNS pinning boundary.
 
 This split is deliberately not the default Blueprint because Render background workers and cron jobs do not have a free compute plan.
 

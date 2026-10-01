@@ -158,13 +158,14 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Redis-backed operator limits reject abusive authenticated reads before database work.
 - Endpoint-specific signature profiles support Replay Room HMAC (`x-replay-signature`), GitHub (`x-hub-signature-256`), and timestamp-bound Stripe signatures. Signature headers are redacted before storage.
 - Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
-- Network calls time out after 10 seconds.
-- Response bodies are truncated before storage.
+- Outbound sockets are pinned to the validated address set while preserving the original Host header and TLS server name; redirects are returned as terminal responses instead of being followed to an unchecked target, and connections are never pooled across validations.
+- The 10-second network deadline covers both DNS resolution and the HTTP exchange; an expired DNS phase cancels its underlying resolver work.
+- Response capture is bounded to 4 KiB before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
 - Postgres-backed delivery-intent claims suppress duplicate queue execution and preserve exact replay metadata through Key Value loss.
 - Incident exports use a separately generated evidence-signing secret and disable response caching.
 
-This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, DNS pinning to remove the residual lookup-to-connect rebinding window, and configurable retention by tenant.
+This is an early-stage project. Production hardening would add organization-scoped authorization, encryption for stored payloads and endpoint secrets, explicit egress allowlists, and configurable retention by tenant.
 
 ## Verification
 
@@ -183,7 +184,7 @@ npm run smoke:live -- \
   --space https://YOUR-SPACE.static.hf.space
 ```
 
-The current public deployment passed this gate on 2026-09-28 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all nine required OpenAPI paths, the mounted console, and the console's exact CORS policy.
+The current public deployment passed this gate on 2026-09-30 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all ten required OpenAPI paths, the mounted console, the console's exact CORS policy, and the credential-free Hugging Face demo boundary.
 
 GitHub Actions runs the repository verification gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate daily and manually dispatchable live-smoke workflow checks Render and Hugging Face for post-deploy drift. The release workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
 
@@ -201,7 +202,7 @@ GitHub Actions runs the repository verification gate on every branch push and pu
 
 ## Status
 
-Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passed the repository's end-to-end deployment gate on commit `43cca36`; the public Hugging Face Space runs the credential-free outage drill from a reproducible, CI-inspected bundle. This remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
+Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passes the repository's end-to-end deployment gate; the public Hugging Face Space runs the credential-free outage drill from a reproducible, CI-inspected bundle. This remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
 
 ## License
 

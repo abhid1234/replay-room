@@ -10,4 +10,4 @@ No public production release is supported yet. Security fixes target the latest 
 
 ## Boundaries
 
-Replay Room redacts sensitive headers, validates webhook signatures, limits payload size and ingest rate, blocks private or reserved outbound destinations, and seals evidence bundles. The current outbound check still has a DNS lookup-to-connect rebinding window; hardened multi-tenant deployments require DNS pinning or an egress proxy. Stored payload encryption and organization-scoped authorization are also required before handling third-party production traffic.
+Replay Room redacts sensitive headers, validates webhook signatures, limits payload size and ingest rate, blocks private or reserved outbound destinations, pins each outbound socket to the address that passed validation, refuses redirect following, and seals evidence bundles. Stored payload encryption, organization-scoped authorization, explicit egress policy, and tenant retention controls are still required before handling third-party production traffic.

@@ -44,9 +44,9 @@ The endpoint schema fails closed on inconsistent configuration: signed profiles 
 
 ## Outbound network boundary
 
-Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP protocols. Immediately before every live delivery, rehearsal, or replay, the worker resolves the hostname and rejects any answer in loopback, private, carrier-grade NAT, link-local, multicast, or reserved space. A security rejection is recorded as a terminal attempt and dead-lettered instead of entering a retry loop.
+Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP protocols. Immediately before every live delivery, rehearsal, or replay, the worker resolves the hostname and rejects the entire result set if any answer is loopback, private, carrier-grade NAT, link-local, multicast, reserved, or malformed. IPv6 validation admits global unicast space and excludes the special-purpose ranges maintained in the [IANA IPv6 registry](https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml). A security rejection is recorded as a terminal attempt and dead-lettered instead of entering a retry loop.
 
-This preflight materially reduces SSRF exposure but does not pin the subsequent connection to the inspected address. A hardened multi-tenant deployment should add a custom DNS-pinning HTTP dispatcher or an egress proxy to close that lookup-to-connect rebinding window.
+The outbound client races the validated IPv4 and IPv6 answers, connects only to that in-memory set, and retains the original Host header and TLS server name. It never performs a second DNS lookup, never follows redirects, and never pools a socket across validations, closing the lookup-to-connect rebinding window, stale-connection reuse, and redirect-based target switching. One wall-clock deadline covers resolution, connection, and response capture; an expired resolution cancels both in-flight A and AAAA queries. A production tenant deployment should still enforce an external egress allowlist as defense in depth.
 
 ## Rehearsal contract
 

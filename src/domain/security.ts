@@ -1,9 +1,28 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { lookup } from "node:dns/promises";
+import { Resolver } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { SignatureProfile } from "./types.js";
 
-export type DestinationLookup = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
+export type DestinationLookup = (
+  hostname: string,
+  signal?: AbortSignal,
+) => Promise<Array<{ address: string; family: number }>>;
+
+export interface DestinationDnsResolver {
+  resolve4(hostname: string): Promise<string[]>;
+  resolve6(hostname: string): Promise<string[]>;
+  cancel(): void;
+}
+
+export interface ResolvedAddress {
+  address: string;
+  family: 4 | 6;
+}
+
+export interface ResolvedDestination {
+  url: URL;
+  addresses: [ResolvedAddress, ...ResolvedAddress[]];
+}
 
 export class UnsafeDestinationError extends Error {
   constructor(message: string) {
@@ -22,6 +41,14 @@ const REDACTED_HEADERS = new Set([
   "x-hub-signature-256",
   "x-replay-signature",
 ]);
+
+const PUBLIC_IPV6_SPACE = ipv6Cidr("2000::", 3);
+const SPECIAL_IPV6_RANGES = [
+  ipv6Cidr("2001::", 23),
+  ipv6Cidr("2001:db8::", 32),
+  ipv6Cidr("2002::", 16),
+  ipv6Cidr("3fff::", 20),
+];
 
 export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -103,22 +130,77 @@ export function assertSafeDestination(rawUrl: string, allowPrivate: boolean): UR
   return url;
 }
 
-export async function assertSafeResolvedDestination(
+export async function resolveSafeDestination(
   rawUrl: string,
   allowPrivate: boolean,
   lookupFn?: DestinationLookup,
-): Promise<URL> {
+  signal?: AbortSignal,
+): Promise<ResolvedDestination> {
   const url = assertSafeDestination(rawUrl, allowPrivate);
-  if (allowPrivate || isIP(normalizeAddress(url.hostname))) return url;
-  const addresses = await (lookupFn ?? defaultLookup)(url.hostname);
+  const literalAddress = normalizeAddress(url.hostname);
+  const literalFamily = ipFamily(literalAddress);
+  if (literalFamily) {
+    const resolved = { address: literalAddress, family: literalFamily };
+    return { url, addresses: [resolved] };
+  }
+
+  const addresses = await (lookupFn ?? defaultLookup)(url.hostname, signal);
   if (addresses.length === 0) throw new Error("Destination hostname did not resolve");
-  if (addresses.some(({ address }) => isPrivateAddress(address))) {
+  const normalized = addresses.map(({ address }) => {
+    const value = normalizeAddress(address);
+    const family = ipFamily(value);
+    if (!family) throw new UnsafeDestinationError("Destination DNS returned an invalid address");
+    return { address: value, family };
+  });
+  if (!allowPrivate && normalized.some(({ address }) => isPrivateAddress(address))) {
     throw new UnsafeDestinationError("Destination resolves to a private or reserved network");
   }
-  return url;
+  const [primary, ...alternates] = normalized;
+  return { url, addresses: [primary!, ...alternates] };
 }
 
-const defaultLookup: DestinationLookup = (hostname) => lookup(hostname, { all: true, verbatim: true });
+export function createDestinationLookup(
+  createResolver: () => DestinationDnsResolver = () => new Resolver(),
+): DestinationLookup {
+  return async (hostname, signal) => {
+    if (signal?.aborted) throw new Error("Destination resolution was cancelled");
+    const resolver = createResolver();
+    const cancel = () => resolver.cancel();
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      const [ipv4Result, ipv6Result] = await Promise.allSettled([
+        resolver.resolve4(hostname),
+        resolver.resolve6(hostname),
+      ]);
+      if (signal?.aborted) throw new Error("Destination resolution was cancelled");
+
+      const ipv4 = ipv4Result.status === "fulfilled"
+        ? ipv4Result.value.map((address) => ({ address, family: 4 }))
+        : [];
+      const ipv6 = ipv6Result.status === "fulfilled"
+        ? ipv6Result.value.map((address) => ({ address, family: 6 }))
+        : [];
+      const addresses = [...ipv6, ...ipv4];
+      if (addresses.length > 0) return addresses;
+
+      const unexpectedFailure = [ipv4Result, ipv6Result].find(
+        (result) => result.status === "rejected" && !isEmptyDnsResult(result.reason),
+      );
+      if (unexpectedFailure?.status === "rejected") throw unexpectedFailure.reason;
+      return [];
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+    }
+  };
+}
+
+const defaultLookup = createDestinationLookup();
+
+function isEmptyDnsResult(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  const code = String(error.code);
+  return code === "ENODATA" || code === "ENOTFOUND";
+}
 
 function isPrivateHostname(hostname: string): boolean {
   const value = hostname.toLowerCase();
@@ -142,20 +224,44 @@ function isPrivateAddress(value: string): boolean {
       || a >= 224;
   }
   if (isIP(address) === 6) {
-    const normalized = address.toLowerCase();
-    if (normalized.startsWith("::ffff:")) return isPrivateAddress(normalized.slice(7));
-    return normalized === "::"
-      || normalized === "::1"
-      || normalized.startsWith("fc")
-      || normalized.startsWith("fd")
-      || /^fe[89ab]/.test(normalized)
-      || normalized.startsWith("2001:db8:");
+    const value = ipv6ToBigInt(address);
+    if (value === null || !inIpv6Cidr(value, PUBLIC_IPV6_SPACE)) return true;
+    return SPECIAL_IPV6_RANGES.some((range) => inIpv6Cidr(value, range));
   }
   return false;
 }
 
 function normalizeAddress(value: string): string {
   return value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
+}
+
+function ipFamily(value: string): 4 | 6 | null {
+  const family = isIP(value);
+  return family === 4 || family === 6 ? family : null;
+}
+
+function ipv6Cidr(address: string, prefixLength: number): { network: bigint; prefixLength: number } {
+  const network = ipv6ToBigInt(address);
+  if (network === null) throw new Error(`Invalid IPv6 CIDR base: ${address}`);
+  return { network, prefixLength };
+}
+
+function inIpv6Cidr(value: bigint, cidr: { network: bigint; prefixLength: number }): boolean {
+  const shift = BigInt(128 - cidr.prefixLength);
+  return value >> shift === cidr.network >> shift;
+}
+
+function ipv6ToBigInt(address: string): bigint | null {
+  const value = normalizeAddress(address).toLowerCase().split("%", 1)[0]!;
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+  const leading = halves[0] ? halves[0].split(":") : [];
+  const trailing = halves[1] ? halves[1].split(":") : [];
+  const missing = halves.length === 2 ? 8 - leading.length - trailing.length : 0;
+  if (missing < 0 || (halves.length === 1 && leading.length !== 8)) return null;
+  const groups = [...leading, ...Array.from({ length: missing }, () => "0"), ...trailing];
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) return null;
+  return groups.reduce((result, group) => (result << 16n) | BigInt(`0x${group}`), 0n);
 }
 
 function headerValue(value: string | string[] | undefined): string {
