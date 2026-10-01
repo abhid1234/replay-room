@@ -66,6 +66,7 @@
     "evidence:inspect": "tsx src/cli/verify-evidence.ts inspect",
     "fixtures:build": "node scripts/build-fixture-dataset.mjs",
     "fixtures:check": "node scripts/build-fixture-dataset.mjs --check",
+    "space:build": "node scripts/build-huggingface-space.mjs",
     "test": "vitest run",
     "test:integration": "INTEGRATION_TESTS=true vitest run tests/integration.test.ts",
     "test:smoke": "node --test scripts/check-live-deployment.node-test.mjs",
@@ -74,7 +75,7 @@
     "conformance": "node scripts/check-conformance.mjs",
     "test:package": "node --test scripts/check-registry-version.node-test.mjs && node scripts/check-package.mjs",
     "smoke:live": "node scripts/check-live-deployment.mjs",
-    "verify": "npm run typecheck && npm test && npm run test:smoke && npm run build && npm run conformance && npm run fixtures:check && npm run test:package",
+    "verify": "npm run typecheck && npm test && npm run test:smoke && npm run build && npm run conformance && npm run fixtures:check && npm run space:build && npm run test:package",
     "prepack": "npm run build"
   },
   "dependencies": {

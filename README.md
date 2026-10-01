@@ -3,7 +3,7 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
-[Live console](https://replay-room-web.onrender.com) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json)
+[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json)
 
 **Rehearse a failed webhook before you replay it.**
 
@@ -27,7 +27,7 @@ Recent developer discussions keep converging on the same operational gap: receiv
 
 The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md). Provider setup and forwarding contracts are in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
-The synthetic incident and replay-guard corpus is published as the deterministic, two-configuration [Replay Room fixtures dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures). Its generated manifest records record counts, byte lengths, and SHA-256 digests, while the build rejects secret-bearing or non-synthetic inputs. See [docs/FIXTURES.md](docs/FIXTURES.md) for generation, upload, and readback verification.
+The synthetic incident and replay-guard corpus is published as the deterministic, two-configuration [Replay Room fixtures dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures). Its generated manifest records record counts, byte lengths, and SHA-256 digests, while the build rejects secret-bearing or non-synthetic inputs. The separate [Replay Room Space](https://huggingface.co/spaces/abhid1234/replay-room) packages the outage drill as a public static demo without operator credentials or admin API capability. See [docs/FIXTURES.md](docs/FIXTURES.md) and [docs/HUGGINGFACE_SPACE.md](docs/HUGGINGFACE_SPACE.md) for the two surfaces and their verification paths.
 
 ## The incident flight recorder
 
@@ -194,7 +194,7 @@ GitHub Actions runs the same gate on every branch push and pull request, exercis
 
 ## Status
 
-Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passed the repository's end-to-end deployment gate on commit `43cca36`. It remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
+Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passed the repository's end-to-end deployment gate on commit `43cca36`; the public Hugging Face Space runs the credential-free outage drill from a reproducible, CI-inspected bundle. This remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
 
 ## License
 
