@@ -8,6 +8,8 @@ All notable changes to Replay Room are documented here.
 
 ### Added
 
+- a public, credential-free Hugging Face outage drill built from the same inspected console bundle and linked to its live proof surfaces;
+- a scheduled three-surface smoke check that verifies the Render API, Render console, and Hugging Face demo together;
 - a side-effect-free replay preflight with an eight-condition operator decision trace;
 - a DNS-pinned, dual-stack outbound HTTP client that preserves the original Host and TLS identity without following redirects or reusing a connection across validations;
 - receiver-aware retry planning with bounded `Retry-After` support, database-enforced availability, per-event send serialization, and atomic audit evidence.
@@ -16,7 +18,12 @@ All notable changes to Replay Room are documented here.
 
 - the newest rehearsal result is authoritative, so an older passing rehearsal cannot bypass a later failure;
 - one delivery deadline now covers cancellable DNS resolution and the HTTP exchange, and outbound response capture is bounded to 4 KiB before it enters the incident ledger;
+- the Render Blueprint now uses only Hobby-compatible service configuration;
 - release verification now rejects version drift across the package, lockfile, OpenAPI contract, console workspace, and fixture corpus.
+
+### Fixed
+
+- the operator console stops authenticated polling after a rejected token instead of producing a stream of unauthorized requests.
 
 ## 0.1.1 - 2026-09-27
 

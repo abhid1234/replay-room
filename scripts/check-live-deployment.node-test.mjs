@@ -38,7 +38,7 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
     }
     if (url === 'https://api.example.com/openapi.json') {
       const paths = Object.fromEntries(REQUIRED_PATHS.filter((path) => path !== missingPath).map((path) => [path, {}]));
-      return json({ openapi: '3.1.0', info: { title: 'Replay Room API', version: '0.1.1' }, paths });
+      return json({ openapi: '3.1.0', info: { title: 'Replay Room API', version: '0.1.2' }, paths });
     }
     if (url === 'https://console.example.com' && method === 'GET') {
       return new Response('<!doctype html><title>Replay Room</title><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } });
@@ -65,7 +65,7 @@ const config = {
   apiUrl: 'https://api.example.com',
   siteUrl: 'https://console.example.com',
   spaceUrl: 'https://space.example.com',
-  expectedVersion: '0.1.1',
+  expectedVersion: '0.1.2',
   timeoutMs: 10_000,
   intervalMs: 1_000,
   requestTimeoutMs: 2_000,
@@ -86,9 +86,9 @@ test('parses required targets and timing overrides', () => {
     '--timeout-ms', '90000',
     '--interval-ms', '2000',
     '--request-timeout-ms', '7000',
-    '--expected-version', '0.1.1',
+    '--expected-version', '0.1.2',
   ]), {
-    apiUrl: 'https://api.example.com', siteUrl: 'https://console.example.com', spaceUrl: 'https://space.example.com', expectedVersion: '0.1.1',
+    apiUrl: 'https://api.example.com', siteUrl: 'https://console.example.com', spaceUrl: 'https://space.example.com', expectedVersion: '0.1.2',
     timeoutMs: 90_000, intervalMs: 2_000, requestTimeoutMs: 7_000,
   });
 });

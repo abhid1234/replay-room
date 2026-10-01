@@ -21,9 +21,8 @@ on:
         default: https://abhid1234-replay-room.static.hf.space
         type: string
       expected_version:
-        description: Expected deployed OpenAPI version
-        required: true
-        default: 0.1.1
+        description: Optional deployed OpenAPI version override; defaults to package.json
+        required: false
         type: string
 
 permissions:
@@ -37,11 +36,16 @@ jobs:
       API_URL: ${{ inputs.api_url || 'https://replay-room-api.onrender.com' }}
       SITE_URL: ${{ inputs.site_url || 'https://replay-room-web.onrender.com' }}
       SPACE_URL: ${{ inputs.space_url || 'https://abhid1234-replay-room.static.hf.space' }}
-      EXPECTED_VERSION: ${{ inputs.expected_version || '0.1.1' }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Verify live Render and Hugging Face deployments
-        run: npm run smoke:live -- --api "$API_URL" --site "$SITE_URL" --space "$SPACE_URL" --expected-version "$EXPECTED_VERSION"
+        run: |
+          args=(--api "$API_URL" --site "$SITE_URL" --space "$SPACE_URL")
+          if [[ -n "$EXPECTED_VERSION" ]]; then
+            args+=(--expected-version "$EXPECTED_VERSION")
+          fi
+          npm run smoke:live -- "${args[@]}"
