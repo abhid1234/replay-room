@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeBaseUrl, parseArgs, runLiveCheck } from './check-live-deployment.mjs';
+import { normalizeBaseUrl, parseArgs, resolveExpectedVersion, runLiveCheck } from './check-live-deployment.mjs';
 
 const REQUIRED_PATHS = [
   '/health',
@@ -26,7 +26,7 @@ const SPACE_PROOF_LINKS = [
   'https://huggingface.co/datasets/abhid1234/replay-room-fixtures',
 ];
 
-function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com', spaceCapabilityLeak = '', missingProof = '' } = {}) {
+function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com', spaceCapabilityLeak = '', missingProof = '', openApiVersion = '0.1.2' } = {}) {
   let healthAttempts = 0;
   return async (input, init = {}) => {
     const url = String(input);
@@ -38,7 +38,7 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
     }
     if (url === 'https://api.example.com/openapi.json') {
       const paths = Object.fromEntries(REQUIRED_PATHS.filter((path) => path !== missingPath).map((path) => [path, {}]));
-      return json({ openapi: '3.1.0', info: { title: 'Replay Room API', version: '0.1.2' }, paths });
+      return json({ openapi: '3.1.0', info: { title: 'Replay Room API', version: openApiVersion }, paths });
     }
     if (url === 'https://console.example.com' && method === 'GET') {
       return new Response('<!doctype html><title>Replay Room</title><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } });
@@ -91,6 +91,20 @@ test('parses required targets and timing overrides', () => {
     apiUrl: 'https://api.example.com', siteUrl: 'https://console.example.com', spaceUrl: 'https://space.example.com', expectedVersion: '0.1.2',
     timeoutMs: 90_000, intervalMs: 2_000, requestTimeoutMs: 7_000,
   });
+});
+
+test('uses the package version when the workflow supplies no override and rejects a stale deployment', async () => {
+  const parsed = parseArgs([
+    '--api', 'https://api.example.com',
+    '--site', 'https://console.example.com',
+    '--space', 'https://space.example.com',
+  ]);
+  const resolved = await resolveExpectedVersion(parsed, async () => ({ version: '0.1.2' }));
+  assert.equal(resolved.expectedVersion, '0.1.2');
+  await assert.rejects(
+    runLiveCheck(resolved, { fetch: fixtureFetch({ openApiVersion: '0.1.1' }) }),
+    /OpenAPI version 0\.1\.1 does not match 0\.1\.2/,
+  );
 });
 
 test('waits through a cold start and verifies health, contract, console, and CORS', async () => {

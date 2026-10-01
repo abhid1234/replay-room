@@ -252,17 +252,20 @@ function usage() {
   return `Usage: npm run smoke:live -- --api https://api.example.com --site https://app.example.com [options]\n\nOptions:\n  --space <origin>              Public Hugging Face Static Space origin\n  --expected-version <version>  Expected OpenAPI version (defaults to package version)\n  --timeout-ms <milliseconds>   Total cold-start allowance (default: 120000)\n  --interval-ms <milliseconds>  Delay between health attempts (default: 3000)\n  --request-timeout-ms <ms>     Timeout for each HTTP request (default: 15000)`;
 }
 
+export async function resolveExpectedVersion(options, loadPackage = async () => JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))) {
+  if (options.expectedVersion) return options;
+  const packageJson = await loadPackage();
+  return { ...options, expectedVersion: packageJson.version };
+}
+
 export async function main(args = process.argv.slice(2)) {
   try {
-    const options = parseArgs(args);
+    let options = parseArgs(args);
     if (options.help) {
       console.log(usage());
       return;
     }
-    if (!options.expectedVersion) {
-      const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-      options.expectedVersion = packageJson.version;
-    }
+    options = await resolveExpectedVersion(options);
     console.log(JSON.stringify(await runLiveCheck(options), null, 2));
   } catch (error) {
     console.error(JSON.stringify({
