@@ -38,7 +38,12 @@ const guardFixture = JSON.parse(await readFile(resolve(root, "fixtures", manifes
 for (const guardCase of guardFixture.cases) {
   const event = { ...guardFixture.event, ...(guardCase.eventPatch ?? {}) };
   const decision = evaluateReplay(event, guardCase.rehearsal, guardCase.request);
-  assert.deepEqual(decision, guardCase.expected, `${guardCase.id}: replay guard decision drifted`);
+  const actual = {
+    allowed: decision.allowed,
+    reasons: decision.reasons,
+    checks: Object.fromEntries(decision.checks.map((check) => [check.code, check.status])),
+  };
+  assert.deepEqual(actual, guardCase.expected, `${guardCase.id}: replay guard decision drifted`);
 }
 
 console.log(JSON.stringify({

@@ -84,7 +84,7 @@ describe("webhook API", () => {
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
       info: { title: "Replay Room API", version: "0.1.1" },
-      paths: { "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay": {} },
+      paths: { "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });
   });
@@ -284,6 +284,64 @@ describe("webhook API", () => {
       options: { jobId: expect.stringContaining(`replay-${rehearsal.id}`) },
     });
     expect(store.audit.map((entry) => entry.action)).toEqual(["replay.approved", "replay.duplicate_suppressed"]);
+  });
+
+  it("preflights every guard without side effects and treats the newest rehearsal as authoritative", async () => {
+    const store = new FakeStore();
+    const queue = new FakeQueue();
+    const created = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: "failed-payment-preflight",
+      headers: {},
+      payload: { type: "payment.failed", paymentId: "pay_preflight" },
+      payloadSha256: "f".repeat(64),
+    });
+    await store.updateEvent(created.event.id, { status: "dead_letter", attemptCount: 2 });
+    await store.addRehearsal({
+      eventId: created.event.id,
+      payloadSha256: "f".repeat(64),
+      destinationUrl: "https://example.com/hook",
+      passed: true,
+      statusCode: 204,
+      notes: "initial recovery check passed",
+    });
+    await store.addRehearsal({
+      eventId: created.event.id,
+      payloadSha256: "f".repeat(64),
+      destinationUrl: "https://example.com/hook",
+      passed: false,
+      statusCode: 503,
+      notes: "receiver regressed after the initial pass",
+    });
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+    const payload = { destinationUrl: "https://example.com/hook", reason: "Receiver owner approved recovery" };
+    const headers = { authorization: `Bearer ${config.ADMIN_TOKEN}`, "content-type": "application/json", "x-operator": "incident-commander" };
+
+    const preflight = await app.inject({ method: "POST", url: `/api/events/${created.event.id}/replay/preflight`, headers, payload });
+
+    expect(preflight.statusCode).toBe(200);
+    expect(preflight.headers["cache-control"]).toBe("no-store");
+    expect(preflight.json()).toMatchObject({
+      allowed: false,
+      reasons: ["The latest rehearsal did not pass"],
+      checks: expect.arrayContaining([
+        expect.objectContaining({ code: "rehearsal", status: "pass" }),
+        expect.objectContaining({ code: "rehearsal_result", status: "fail" }),
+      ]),
+      risk: { level: "low", requiresAcknowledgement: false },
+    });
+    expect(preflight.json().checks).toHaveLength(8);
+    expect(queue.jobs).toHaveLength(0);
+    expect(store.audit).toHaveLength(0);
+    expect(store.intents.size).toBe(0);
+
+    const blockedReplay = await app.inject({ method: "POST", url: `/api/events/${created.event.id}/replay`, headers, payload });
+    expect(blockedReplay.statusCode).toBe(409);
+    expect(blockedReplay.json().reasons).toContain("The latest rehearsal did not pass");
+    expect(queue.jobs).toHaveLength(0);
+    expect(store.intents.size).toBe(0);
+    expect(store.audit).toMatchObject([{ action: "replay.blocked", metadata: { guardChecks: expect.any(Array) } }]);
   });
 
   it("blocks ambiguous replay until the operator acknowledges duplicate-side-effect risk", async () => {

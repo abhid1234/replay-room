@@ -60,6 +60,8 @@ A rehearsal sends the original payload with `x-replay-room-mode: rehearsal` to a
 
 Production replay requires a passing record with the same payload digest and destination. This intentionally makes target changes force a new rehearsal.
 
+The API evaluates the newest rehearsal, not the newest passing rehearsal. A failed check after an earlier success therefore closes the replay gate until a new rehearsal passes. `POST /api/events/:id/replay/preflight` returns the complete eight-condition decision trace without writing audit rows, creating delivery intents, or enqueueing jobs. The console invalidates that trace whenever the target, reason, or risk acknowledgement changes; the mutation endpoint always reevaluates the guard server-side before approving a replay.
+
 ## Duplicate-side-effect risk
 
 Before approval, Replay Room derives a deterministic risk assessment from the production attempt transcript. Missing idempotency evidence, a network attempt with no HTTP response, or a prior 2xx response is high risk because receiver-side acceptance may already have happened. Multiple attempts, throttling, and 5xx responses are elevated risk. A stable idempotency key plus only permanent 4xx rejections is low risk.

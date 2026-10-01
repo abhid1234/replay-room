@@ -30,7 +30,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://receiver.example/webhooks/payments"
       },
-      "expected": { "allowed": true, "reasons": [] }
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+      }
     },
     {
       "id": "missing-rehearsal-blocks",
@@ -40,7 +44,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://receiver.example/webhooks/payments"
       },
-      "expected": { "allowed": false, "reasons": ["Run a successful rehearsal before replaying"] }
+      "expected": {
+        "allowed": false,
+        "reasons": ["Run a successful rehearsal before replaying"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "fail", "rehearsal_result": "pending", "payload_binding": "pending", "destination_binding": "pending", "event_state": "pass", "risk_acknowledgement": "pass" }
+      }
     },
     {
       "id": "destination-drift-blocks",
@@ -59,7 +67,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://other.example/webhooks/payments"
       },
-      "expected": { "allowed": false, "reasons": ["The destination changed after rehearsal"] }
+      "expected": {
+        "allowed": false,
+        "reasons": ["The destination changed after rehearsal"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "fail", "event_state": "pass", "risk_acknowledgement": "pass" }
+      }
     },
     {
       "id": "weak-operator-context-blocks",
@@ -80,7 +92,8 @@
       },
       "expected": {
         "allowed": false,
-        "reasons": ["A replay reason of at least 10 characters is required", "An actor is required"]
+        "reasons": ["A replay reason of at least 10 characters is required", "An actor is required"],
+        "checks": { "reason": "fail", "actor": "fail", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
       }
     },
     {
@@ -100,7 +113,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://receiver.example/webhooks/payments"
       },
-      "expected": { "allowed": false, "reasons": ["The payload changed after rehearsal"] }
+      "expected": {
+        "allowed": false,
+        "reasons": ["The payload changed after rehearsal"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "fail", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+      }
     },
     {
       "id": "failed-rehearsal-blocks",
@@ -119,7 +136,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://receiver.example/webhooks/payments"
       },
-      "expected": { "allowed": false, "reasons": ["The latest rehearsal did not pass"] }
+      "expected": {
+        "allowed": false,
+        "reasons": ["The latest rehearsal did not pass"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "fail", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+      }
     },
     {
       "id": "non-dead-letter-blocks",
@@ -139,7 +160,11 @@
         "reason": "Receiver repair verified in rehearsal",
         "destinationUrl": "https://receiver.example/webhooks/payments"
       },
-      "expected": { "allowed": false, "reasons": ["Only dead-letter events can be replayed"] }
+      "expected": {
+        "allowed": false,
+        "reasons": ["Only dead-letter events can be replayed"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "fail", "risk_acknowledgement": "pass" }
+      }
     }
   ]
 }

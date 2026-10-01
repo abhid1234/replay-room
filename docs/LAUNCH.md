@@ -27,6 +27,8 @@ A dead-letter event cannot go directly back to production. The operator first ru
 
 The replay guard then checks dead-letter state, operator identity, a meaningful reason, a passing rehearsal, payload equality, and destination equality. Any drift blocks the action and writes the rejection to the audit trail.
 
+Operators can first run the exact same guard as a read-only preflight. The console exposes each condition as pass, fail, or pending and refuses to enable approval after any input changes until the decision is recomputed. The production action still reevaluates every condition on the server; the checklist explains authority but never replaces it.
+
 The result is intentionally inconvenient in one useful way: changing the target or payload invalidates the previous proof. The operator must rehearse again.
 
 Replay Room also asks whether the receiver may already have acted. A missing idempotency key, a connection failure without an HTTP response, or a prior success response produces a high duplicate-side-effect risk. The console explains the exact signals and requires explicit acknowledgement before the guard can approve the replay. The system does not pretend ambiguity is certainty; it makes the operator own the residual risk.

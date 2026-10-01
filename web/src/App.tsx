@@ -62,6 +62,18 @@ type Detail = Event & {
     signals: Array<{ code: string; severity: "low" | "elevated" | "high"; message: string }>;
   };
 };
+type GuardCheck = {
+  code: string;
+  label: string;
+  status: "pass" | "fail" | "pending";
+  message: string;
+};
+type ReplayPreflight = {
+  allowed: boolean;
+  reasons: string[];
+  checks: GuardCheck[];
+  risk: Detail["replayRisk"];
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
@@ -187,6 +199,19 @@ function ConsoleApp() {
     setMessage(receipt.duplicate ? "That replay intent already exists; no duplicate delivery was queued." : "Guard approved the replay and queued it for delivery.");
   };
 
+  const preflightReplay = async (event: Detail, destinationUrl: string, reason: string, acknowledgeRisk: boolean): Promise<ReplayPreflight | null> => {
+    try {
+      const decision = await request<ReplayPreflight>(`/api/events/${event.id}/replay/preflight`, {
+        method: "POST", headers: { "x-operator": "dashboard" }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
+      });
+      setMessage(decision.allowed ? "Replay preflight passed. No state was changed." : `Replay preflight found ${decision.reasons.length} blocker${decision.reasons.length === 1 ? "" : "s"}.`);
+      return decision;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not run replay preflight");
+      return null;
+    }
+  };
+
   const downloadEvidence = async (event: Detail) => {
     const response = await fetch(`${API_BASE}/api/events/${event.id}/evidence`, { headers: auth });
     if (!response.ok) {
@@ -255,7 +280,7 @@ function ConsoleApp() {
 
         <article className="panel detail-panel">
           <div className="panel-title"><span>Replay inspector</span><span className="mono">{selected?.id.slice(0, 12) ?? "NO EVENT"}</span></div>
-          {selected ? <EventInspector key={selected.id} event={selected} onRehearse={rehearse} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
+          {selected ? <EventInspector key={selected.id} event={selected} onRehearse={rehearse} onPreflight={preflightReplay} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
         </article>
       </section>
 
@@ -388,15 +413,33 @@ function ageLabel(seconds: number | null | undefined): string {
   return `${Math.round(seconds / 60)}m ago`;
 }
 
-function EventInspector({ event, onRehearse, onReplay, onDownload }: {
+function EventInspector({ event, onRehearse, onPreflight, onReplay, onDownload }: {
   event: Detail;
   onRehearse: (event: Detail, target: string) => Promise<void>;
+  onPreflight: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean) => Promise<ReplayPreflight | null>;
   onReplay: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean) => Promise<void>;
   onDownload: (event: Detail) => Promise<void>;
 }) {
   const [target, setTarget] = useState(event.endpoint.destinationUrl);
   const [reason, setReason] = useState("Receiver fix verified; replay approved after rehearsal.");
   const [riskAccepted, setRiskAccepted] = useState(false);
+  const [preflight, setPreflight] = useState<ReplayPreflight | null>(null);
+  const [checking, setChecking] = useState(false);
+  const invalidate = () => setPreflight(null);
+  const runPreflight = async () => {
+    setChecking(true);
+    try { setPreflight(await onPreflight(event, target, reason, riskAccepted)); }
+    finally { setChecking(false); }
+  };
+  const approveReplay = async () => {
+    await onReplay(event, target, reason, riskAccepted);
+    setPreflight(null);
+  };
+  const guardLabel = preflight?.allowed
+    ? "Preflight passed"
+    : preflight
+      ? `${preflight.reasons.length} blocker${preflight.reasons.length === 1 ? "" : "s"}`
+      : event.status === "dead_letter" ? "Run guard preflight" : "Replay locked";
   return <div className="inspector">
     <div className={`diagnosis ${event.diagnosis.severity}`}>
       <div><span>Flight recorder diagnosis</span><b>{event.diagnosis.code.replaceAll("_", " ")}</b></div>
@@ -415,16 +458,26 @@ function EventInspector({ event, onRehearse, onReplay, onDownload }: {
       <p>{event.replayRisk.summary}</p>
       <ul>{event.replayRisk.signals.map((signal) => <li key={signal.code}>{signal.message}</li>)}</ul>
       {event.replayRisk.requiresAcknowledgement && <label className="risk-acknowledgement">
-        <input type="checkbox" checked={riskAccepted} onChange={(change) => setRiskAccepted(change.target.checked)} />
+        <input type="checkbox" checked={riskAccepted} onChange={(change) => { setRiskAccepted(change.target.checked); invalidate(); }} />
         <span>I reviewed the ambiguous outcome and accept the duplicate-side-effect risk.</span>
       </label>}
     </div>
-    <div className="guard-banner"><span>Replay guard</span><strong>{event.status === "dead_letter" ? "Waiting for rehearsal evidence" : "Replay locked"}</strong></div>
+    <div className={`guard-banner ${preflight?.allowed ? "allowed" : preflight ? "blocked" : ""}`} aria-live="polite"><span>Replay guard</span><strong>{guardLabel}</strong></div>
+    {preflight && <div className="guard-trace" aria-label="Replay guard decision trace">
+      {preflight.checks.map((check) => <div className={check.status} key={check.code}>
+        <i>{check.status === "pass" ? "PASS" : check.status === "fail" ? "FAIL" : "WAIT"}</i>
+        <span><b>{check.label}</b><small>{check.message}</small></span>
+      </div>)}
+    </div>}
     <pre>{JSON.stringify(event.payload, null, 2)}</pre>
     <div className="action-form">
-      <label>Rehearsal / replay target</label><input value={target} onChange={(e) => setTarget(e.target.value)} />
-      <label>Operator reason</label><textarea value={reason} onChange={(e) => setReason(e.target.value)} />
-      <div className="actions"><button onClick={() => void onRehearse(event, target)}>Run rehearsal</button><button className="danger-button" disabled={event.replayRisk.requiresAcknowledgement && !riskAccepted} onClick={() => void onReplay(event, target, reason, riskAccepted)}>Approve replay</button></div>
+      <label htmlFor={`replay-target-${event.id}`}>Rehearsal / replay target</label><input id={`replay-target-${event.id}`} value={target} onChange={(e) => { setTarget(e.target.value); invalidate(); }} />
+      <label htmlFor={`replay-reason-${event.id}`}>Operator reason</label><textarea id={`replay-reason-${event.id}`} value={reason} onChange={(e) => { setReason(e.target.value); invalidate(); }} />
+      <div className="actions">
+        <button onClick={() => { invalidate(); void onRehearse(event, target); }}>Run rehearsal</button>
+        <button className="preflight-button" disabled={checking} onClick={() => void runPreflight()}>{checking ? "Checking guard..." : "Check replay"}</button>
+        <button className="danger-button" disabled={!preflight?.allowed} onClick={() => void approveReplay()}>Approve replay</button>
+      </div>
     </div>
     <div className="timeline">
       {[...event.audit, ...event.rehearsals.map((item) => ({ ...item, action: item.passed ? "rehearsal.passed" : "rehearsal.failed", actor: "worker", reason: item.notes }))]

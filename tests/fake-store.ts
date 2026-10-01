@@ -59,7 +59,7 @@ export class FakeStore implements Store {
   async updateEvent(id: string, patch: Partial<Pick<WebhookEvent, "status" | "attemptCount" | "lastError">>) { const event = this.events.get(id); if (event) this.events.set(id, { ...event, ...patch, updatedAt: new Date().toISOString() }); }
   async addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.attempts.push(row); return row; }
   async addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.rehearsals.push(row); return row; }
-  async latestPassingRehearsal(eventId: string) { return [...this.rehearsals].reverse().find((item) => item.eventId === eventId && item.passed) ?? null; }
+  async latestRehearsal(eventId: string) { return [...this.rehearsals].reverse().find((item) => item.eventId === eventId) ?? null; }
   async addAudit(input: Omit<AuditEntry, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.audit.push(row); return row; }
   async createDeliveryIntent(jobKey: string, job: DeliveryJob, availableAt = new Date().toISOString()) {
     const existing = [...this.intents.values()].find((intent) => intent.jobKey === jobKey);

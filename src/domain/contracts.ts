@@ -41,7 +41,7 @@ export interface Store {
   ): Promise<void>;
   addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">): Promise<DeliveryAttempt>;
   addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">): Promise<Rehearsal>;
-  latestPassingRehearsal(eventId: string): Promise<Rehearsal | null>;
+  latestRehearsal(eventId: string): Promise<Rehearsal | null>;
   addAudit(input: Omit<AuditEntry, "id" | "createdAt">): Promise<AuditEntry>;
   createDeliveryIntent(
     jobKey: string,

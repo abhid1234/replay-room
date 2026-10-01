@@ -87,6 +87,9 @@ export const openApiDocument = {
     "/api/events/{eventId}/rehearse": {
       post: operatorAction("Queue a rehearsal against a controlled destination", "rehearseEvent", "RehearsalRequest", "Rehearsal queued"),
     },
+    "/api/events/{eventId}/replay/preflight": {
+      post: operatorPreflight(),
+    },
     "/api/events/{eventId}/replay": {
       post: operatorAction("Evaluate the replay guard and queue an approved replay", "replayEvent", "ReplayRequest", "Replay queued"),
     },
@@ -134,6 +137,23 @@ export const openApiDocument = {
         reason: { type: "string", minLength: 10, maxLength: 500 },
         acknowledgeRisk: { type: "boolean", default: false, description: "Required when replay risk is high because prior receiver acceptance is ambiguous or no idempotency key exists" },
       }),
+      ReplayPreflightRequest: object(["destinationUrl"], {
+        destinationUrl: uri,
+        reason: { type: "string", maxLength: 500, default: "" },
+        acknowledgeRisk: { type: "boolean", default: false },
+      }),
+      GuardCheck: object(["code", "label", "status", "message"], {
+        code: { enum: ["reason", "actor", "rehearsal", "rehearsal_result", "payload_binding", "destination_binding", "event_state", "risk_acknowledgement"] },
+        label: { type: "string" },
+        status: { enum: ["pass", "fail", "pending"] },
+        message: { type: "string" },
+      }),
+      ReplayPreflight: object(["allowed", "reasons", "checks", "risk"], {
+        allowed: { type: "boolean" },
+        reasons: { type: "array", items: { type: "string" } },
+        checks: { type: "array", minItems: 8, maxItems: 8, items: { $ref: "#/components/schemas/GuardCheck" } },
+        risk: { type: "object" },
+      }),
       ActionReceipt: object(["queued", "eventId", "mode", "deliveryIntentId"], {
         queued: { const: true }, eventId: uuid, mode: { enum: ["rehearsal", "replay"] }, deliveryIntentId: uuid, duplicate: { type: "boolean" },
       }),
@@ -164,5 +184,22 @@ function operatorAction(summary: string, operationId: string, requestSchema: str
     parameters: [{ name: "eventId", in: "path", required: true, schema: uuid }],
     requestBody: { required: true, content: { "application/json": { schema: { $ref: `#/components/schemas/${requestSchema}` } } } },
     responses: { "202": response(successDescription, "ActionReceipt"), "400": response("Input or destination is unsafe", "Problem"), "401": response("Bearer token is missing or invalid", "Problem"), "404": response("Event not found", "Problem"), "409": response("Replay guard rejected the request", "Problem") },
+  };
+}
+
+function operatorPreflight() {
+  return {
+    tags: ["operator"],
+    summary: "Evaluate every replay guard condition without changing state",
+    operationId: "preflightReplay",
+    security: bearerSecurity,
+    parameters: [{ name: "eventId", in: "path", required: true, schema: uuid }],
+    requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/ReplayPreflightRequest" } } } },
+    responses: {
+      "200": response("Replay guard decision trace", "ReplayPreflight"),
+      "400": response("Input or destination is unsafe", "Problem"),
+      "401": response("Bearer token is missing or invalid", "Problem"),
+      "404": response("Event not found", "Problem"),
+    },
   };
 }
