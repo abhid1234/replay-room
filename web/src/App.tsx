@@ -64,6 +64,11 @@ type Detail = Event & {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+const LIVE_CONSOLE_URL = "https://replay-room-web.onrender.com";
+const API_CONTRACT_URL = "https://replay-room-api.onrender.com/openapi.json";
+const SOURCE_URL = "https://github.com/abhid1234/replay-room";
+const FIXTURES_URL = "https://huggingface.co/datasets/abhid1234/replay-room-fixtures";
 
 class ApiRequestError extends Error {
   constructor(message: string, readonly status: number) {
@@ -72,6 +77,37 @@ class ApiRequestError extends Error {
 }
 
 export function App() {
+  return DEMO_MODE ? <DemoApp /> : <ConsoleApp />;
+}
+
+function DemoApp() {
+  return <main>
+    <header className="masthead">
+      <div className="brand"><span className="mark">RR</span><span>Replay Room</span></div>
+      <div className="eyebrow">Incident evidence lab / Hugging Face</div>
+    </header>
+
+    <section className="hero">
+      <div>
+        <p className="kicker">Webhook incidents, reconstructed</p>
+        <h1>Every event leaves a flight recorder.</h1>
+        <p className="lede">Replay Room explains how delivery failed, rehearses the exact recovery, and seals the evidence before anyone can replay production traffic.</p>
+      </div>
+      <div className="connection-panel demo-panel">
+        <div className="connection-title"><span>Public simulation</span><i className="online" /></div>
+        <p>Run the incident below here. Open the Render console when you need the live Postgres ledger, queue health, and guarded operator controls.</p>
+        <a className="primary-link" href={LIVE_CONSOLE_URL} target="_blank" rel="noreferrer">Open the live console</a>
+        <small>No admin token is collected on this Hugging Face surface.</small>
+      </div>
+    </section>
+
+    <IncidentDrill />
+    <SpaceProof />
+    <footer>Interactive demo on Hugging Face · durable state and operator controls remain on Render</footer>
+  </main>;
+}
+
+function ConsoleApp() {
   const [token, setToken] = useState(() => localStorage.getItem("replay-room-token") || "");
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -240,6 +276,46 @@ export function App() {
       <footer>{endpoints.length} endpoint{endpoints.length === 1 ? "" : "s"} configured · no replay without evidence</footer>
     </main>
   );
+}
+
+function SpaceProof() {
+  const architecture = [
+    ["Ingress", "Accept once"],
+    ["Ledger", "Persist intent"],
+    ["Worker", "Bounded retry"],
+    ["Rehearsal", "Test recovery"],
+    ["Replay guard", "Seal evidence"],
+  ];
+  const links = [
+    ["Operate", "Live Render console", LIVE_CONSOLE_URL],
+    ["Inspect", "OpenAPI contract", API_CONTRACT_URL],
+    ["Build", "GitHub source", SOURCE_URL],
+    ["Verify", "Fixture dataset", FIXTURES_URL],
+  ];
+
+  return <section className="space-proof" aria-label="Replay Room architecture and public proof">
+    <div className="proof-heading">
+      <div>
+        <span>One incident, five safety boundaries</span>
+        <h2>The demo is static. The evidence chain is not.</h2>
+      </div>
+      <p>Hugging Face hosts this public drill. Render runs the API, Postgres ledger, BullMQ transport, and worker that enforce the same sequence against real webhook traffic.</p>
+    </div>
+    <div className="architecture-rail">
+      {architecture.map(([name, detail]) => <div className="architecture-node" key={name}>
+        <i />
+        <strong>{name}</strong>
+        <small>{detail}</small>
+      </div>)}
+    </div>
+    <nav className="proof-links" aria-label="Public Replay Room resources">
+      {links.map(([action, label, href]) => <a href={href} target="_blank" rel="noreferrer" key={label}>
+        <span>{action}</span>
+        <strong>{label}</strong>
+        <small>Open public proof</small>
+      </a>)}
+    </nav>
+  </section>;
 }
 
 function Stat({ label, value, accent, danger }: { label: string; value: string | number; accent?: boolean; danger?: boolean }) {
