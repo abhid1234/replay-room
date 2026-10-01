@@ -24,7 +24,10 @@ const rehearsal: Rehearsal = {
 
 describe("replay guard", () => {
   it("allows a dead letter only when passing evidence binds payload and target", () => {
-    expect(evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl })).toEqual({ allowed: true, reasons: [] });
+    const decision = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl });
+    expect(decision).toMatchObject({ allowed: true, reasons: [] });
+    expect(decision.checks).toHaveLength(8);
+    expect(decision.checks.every((item) => item.status === "pass")).toBe(true);
   });
   it("blocks target drift and payload drift", () => {
     const decision = evaluateReplay({ ...event, payloadSha256: "changed" }, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: "https://elsewhere.example/hook" });
@@ -41,7 +44,19 @@ describe("replay guard", () => {
 
     expect(risk).toMatchObject({ level: "high", requiresAcknowledgement: true });
     expect(denied.reasons).toContain("Explicitly acknowledge the duplicate-side-effect risk before replaying");
-    expect(accepted).toEqual({ allowed: true, reasons: [] });
+    expect(denied.checks.find((item) => item.code === "risk_acknowledgement")).toMatchObject({ status: "fail" });
+    expect(accepted).toMatchObject({ allowed: true, reasons: [] });
+    expect(accepted.checks.find((item) => item.code === "risk_acknowledgement")).toMatchObject({ status: "pass" });
+  });
+  it("keeps dependent evidence checks pending until a rehearsal exists", () => {
+    const decision = evaluateReplay(event, null, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasons).toEqual(["Run a successful rehearsal before replaying"]);
+    expect(decision.checks.filter((item) => item.status === "pending").map((item) => item.code)).toEqual([
+      "rehearsal_result",
+      "payload_binding",
+      "destination_binding",
+    ]);
   });
 });
 
