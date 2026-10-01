@@ -11,6 +11,7 @@ const REQUIRED_OPENAPI_PATHS = [
   "/api/system",
   "/api/endpoints",
   "/api/events",
+  "/api/events/{eventId}/replay/preflight",
   "/api/events/{eventId}/rehearse",
   "/api/events/{eventId}/replay",
 ];

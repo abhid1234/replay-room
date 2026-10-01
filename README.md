@@ -142,6 +142,7 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | `GET` | `/api/events/:id` | Event, attempts, rehearsals, and audit trail |
 | `GET` | `/api/events/:id/evidence` | Download the HMAC-sealed incident evidence bundle |
 | `POST` | `/api/events/:id/rehearse` | Queue a safe rehearsal |
+| `POST` | `/api/events/:id/replay/preflight` | Evaluate every replay guard condition without changing state |
 | `POST` | `/api/events/:id/replay` | Run the replay guard and queue an approved replay |
 
 Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when taking an operator action.

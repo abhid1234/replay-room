@@ -199,9 +199,9 @@ export class PostgresStore implements Store {
     return mapRehearsal(result.rows[0] as Row);
   }
 
-  async latestPassingRehearsal(eventId: string): Promise<Rehearsal | null> {
+  async latestRehearsal(eventId: string): Promise<Rehearsal | null> {
     const result = await this.pool.query(
-      "SELECT * FROM rehearsals WHERE event_id = $1 AND passed = true ORDER BY created_at DESC LIMIT 1",
+      "SELECT * FROM rehearsals WHERE event_id = $1 ORDER BY created_at DESC LIMIT 1",
       [eventId],
     );
     return result.rowCount ? mapRehearsal(result.rows[0] as Row) : null;

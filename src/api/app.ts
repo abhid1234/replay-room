@@ -49,6 +49,10 @@ const replaySchema = z.object({
   acknowledgeRisk: z.boolean().default(false),
 });
 
+const replayPreflightSchema = replaySchema.extend({
+  reason: z.string().trim().max(500).default(""),
+});
+
 export async function buildApp({ config, store, queue }: Dependencies): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
@@ -215,13 +219,32 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     return { queued: true, eventId: id, mode: "rehearsal", deliveryIntentId: scheduled.intent.id };
   });
 
+  app.post("/api/events/:id/replay/preflight", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const input = replayPreflightSchema.parse(request.body);
+    assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    const rehearsal = await store.latestRehearsal(id);
+    const actor = actorFrom(request.headers);
+    const risk = assessReplayRisk(event);
+    const decision = evaluateReplay(event, rehearsal, {
+      actor,
+      reason: input.reason,
+      destinationUrl: input.destinationUrl,
+      acknowledgeRisk: input.acknowledgeRisk,
+    }, risk);
+    reply.header("cache-control", "no-store");
+    return { ...decision, risk };
+  });
+
   app.post("/api/events/:id/replay", { preHandler: adminGuard(config) }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const input = replaySchema.parse(request.body);
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
-    const rehearsal = await store.latestPassingRehearsal(id);
+    const rehearsal = await store.latestRehearsal(id);
     const actor = actorFrom(request.headers);
     const risk = assessReplayRisk(event);
     const decision = evaluateReplay(event, rehearsal, {
@@ -236,7 +259,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         action: "replay.blocked",
         actor,
         reason: input.reason,
-        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons, riskLevel: risk.level, riskAcknowledged: input.acknowledgeRisk },
+        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons, guardChecks: decision.checks, riskLevel: risk.level, riskAcknowledged: input.acknowledgeRisk },
       });
       return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
     }
@@ -259,6 +282,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       metadata: {
         destinationUrl: input.destinationUrl,
         guardReasons: decision.reasons,
+        guardChecks: decision.checks,
         deliveryIntentId: scheduled.intent.id,
         jobKey,
         riskLevel: risk.level,

@@ -10,6 +10,7 @@ const REQUIRED_PATHS = [
   '/api/system',
   '/api/endpoints',
   '/api/events',
+  '/api/events/{eventId}/replay/preflight',
   '/api/events/{eventId}/rehearse',
   '/api/events/{eventId}/replay',
 ];
@@ -102,7 +103,7 @@ test('waits through a cold start and verifies health, contract, console, and COR
   assert.equal(result.status, 'passed');
   assert.deepEqual(result.coldStart, { attempts: 3, warmAfterMs: 2_000 });
   assert.equal(result.checks.health.databaseLatencyMs, 4);
-  assert.equal(result.checks.openApi.requiredPaths, 9);
+  assert.equal(result.checks.openApi.requiredPaths, 10);
   assert.deepEqual(result.checks.space, {
     demoMode: true,
     credentialSurface: 'none',
