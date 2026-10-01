@@ -1,7 +1,6 @@
 import type { DeliveryJob, DeliveryQueue, Store } from "./domain/contracts.js";
+import { canonicalDeliveryJobKey } from "./domain/delivery-intent.js";
 import type { DeliveryIntent } from "./domain/types.js";
-
-const DISPATCH_LEASE_MS = 5 * 60_000;
 
 interface ScheduleOptions {
   store: Store;
@@ -9,7 +8,6 @@ interface ScheduleOptions {
   job: DeliveryJob;
   jobKey: string;
   delayMs?: number;
-  now?: Date;
 }
 
 export async function scheduleDelivery({
@@ -18,28 +16,24 @@ export async function scheduleDelivery({
   job,
   jobKey,
   delayMs = 0,
-  now = new Date(),
 }: ScheduleOptions): Promise<{ created: boolean; dispatched: boolean; intent: DeliveryIntent }> {
-  const availableAt = new Date(now.getTime() + Math.max(0, delayMs)).toISOString();
-  const result = await store.createDeliveryIntent(jobKey, job, availableAt);
+  const result = await store.createDeliveryIntent(jobKey, job, { delayMs: Math.max(0, delayMs) });
   const dispatched = result.intent.state === "completed"
     ? false
-    : await dispatchDeliveryIntent(store, queue, result.intent, now);
+    : await dispatchDeliveryIntent(store, queue, result.intent);
   return { ...result, dispatched };
 }
 
 export async function dispatchReadyIntents(
   store: Store,
   queue: DeliveryQueue,
-  now = new Date(),
 ): Promise<{ dispatched: number; failed: number }> {
-  const staleBefore = new Date(now.getTime() - DISPATCH_LEASE_MS).toISOString();
-  const intents = await store.listDispatchableIntents(now.toISOString(), staleBefore);
+  const intents = await store.listDispatchableIntents();
   let dispatched = 0;
   let failed = 0;
   for (const intent of intents) {
     try {
-      if (await dispatchDeliveryIntent(store, queue, intent, now)) dispatched += 1;
+      if (await dispatchDeliveryIntent(store, queue, intent)) dispatched += 1;
     } catch (error) {
       failed += 1;
       console.error(JSON.stringify({
@@ -54,27 +48,21 @@ export async function dispatchReadyIntents(
 }
 
 export function deliveryJobKey(job: DeliveryJob): string {
-  const cycleId = job.cycleId ?? job.mode;
-  const attemptNumber = job.attemptNumber ?? 1;
-  return `${cycleId}-${job.eventId}-attempt-${attemptNumber}`;
+  return canonicalDeliveryJobKey(job);
 }
 
 export async function dispatchDeliveryIntent(
   store: Store,
   queue: DeliveryQueue,
   intent: DeliveryIntent,
-  now: Date,
 ): Promise<boolean> {
-  const dispatchedAt = now.toISOString();
-  const staleBefore = new Date(now.getTime() - DISPATCH_LEASE_MS).toISOString();
-  const prepared = await store.prepareDeliveryIntentDispatch(intent.id, dispatchedAt, staleBefore);
+  const prepared = await store.prepareDeliveryIntentDispatch(intent.id);
   if (!prepared) return false;
-  const delayMs = Math.max(0, Date.parse(intent.availableAt) - now.getTime());
   try {
-    await queue.enqueue(intent.job, { jobId: intent.jobKey, delayMs });
+    await queue.enqueue(intent.job, { jobId: intent.jobKey, delayMs: prepared.delayMs });
     return true;
   } catch (error) {
-    await store.releaseDeliveryIntent(intent.id, dispatchedAt);
+    await store.releaseDeliveryIntent(intent.id, prepared.dispatchedAt);
     throw error;
   }
 }

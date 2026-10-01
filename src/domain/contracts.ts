@@ -26,6 +26,52 @@ export interface CreateEventResult {
   duplicate: boolean;
 }
 
+export interface RetryTransitionInput {
+  eventId: string;
+  jobKey: string;
+  job: DeliveryJob;
+  backoffMs: number;
+  retryAfter: string | null;
+  currentIntentId?: string;
+  currentIntentProcessingAt?: string;
+  completedAt: string;
+  lastError: string;
+  audit: Omit<AuditEntry, "id" | "createdAt">;
+}
+
+export type RetryTransitionResult =
+  | { scheduled: true; intent: DeliveryIntent; created: boolean; delayMs: number }
+  | { scheduled: false; nextStatus: EventStatus };
+
+export interface DeliveryOutcomeInput {
+  eventId: string;
+  status: "delivered" | "dead_letter";
+  lastError: string | null;
+  currentIntentId?: string;
+  currentIntentProcessingAt?: string;
+  completedAt: string;
+  audit: Omit<AuditEntry, "id" | "createdAt">;
+}
+
+export interface DeliveryOutcomeResult {
+  applied: boolean;
+  nextStatus: EventStatus;
+}
+
+export type ClaimDeliveryIntentResult =
+  | { status: "claimed"; intent: DeliveryIntent }
+  | { status: "deferred"; intent: DeliveryIntent; retryAt: string; delayMs: number; reason: "not-yet-available" | "event-busy" }
+  | { status: "unavailable" };
+
+export interface DeliveryIntentDispatch {
+  dispatchedAt: string;
+  delayMs: number;
+}
+
+export type DeliveryIntentSchedule =
+  | { delayMs?: number; availableAt?: never }
+  | { delayMs?: never; availableAt: string };
+
 export interface Store {
   ping(): Promise<void>;
   createEndpoint(input: Omit<Endpoint, "id" | "createdAt">): Promise<Endpoint>;
@@ -39,6 +85,12 @@ export interface Store {
     id: string,
     patch: Partial<Pick<WebhookEvent, "status" | "attemptCount" | "lastError">>,
   ): Promise<void>;
+  beginDeliveryAttempt(
+    eventId: string,
+    attemptCount: number,
+    currentIntentId?: string,
+    currentIntentProcessingAt?: string,
+  ): Promise<boolean>;
   addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">): Promise<DeliveryAttempt>;
   addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">): Promise<Rehearsal>;
   latestRehearsal(eventId: string): Promise<Rehearsal | null>;
@@ -46,15 +98,17 @@ export interface Store {
   createDeliveryIntent(
     jobKey: string,
     job: DeliveryJob,
-    availableAt?: string,
+    schedule?: DeliveryIntentSchedule,
   ): Promise<{ intent: DeliveryIntent; created: boolean }>;
-  listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit?: number): Promise<DeliveryIntent[]>;
-  prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string): Promise<boolean>;
+  commitRetryTransition(input: RetryTransitionInput): Promise<RetryTransitionResult>;
+  commitDeliveryOutcome(input: DeliveryOutcomeInput): Promise<DeliveryOutcomeResult>;
+  listDispatchableIntents(limit?: number): Promise<DeliveryIntent[]>;
+  prepareDeliveryIntentDispatch(id: string): Promise<DeliveryIntentDispatch | null>;
   releaseDeliveryIntent(id: string, dispatchedAt: string): Promise<void>;
-  claimDeliveryIntent(id: string, processingAt: string): Promise<boolean>;
+  claimDeliveryIntent(id: string): Promise<ClaimDeliveryIntentResult>;
   releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void>;
-  completeDeliveryIntent(id: string, completedAt: string): Promise<void>;
-  deliveryIntentStats(staleBeforeIso: string): Promise<DeliveryIntentStats>;
+  completeDeliveryIntent(id: string, completedAt: string, processingAt?: string): Promise<boolean>;
+  deliveryIntentStats(): Promise<DeliveryIntentStats>;
   stats(): Promise<DashboardStats>;
   recoverPending(beforeIso: string): Promise<Array<{ eventId: string; attemptCount: number }>>;
   deleteOlderThan(beforeIso: string): Promise<number>;
@@ -102,4 +156,5 @@ export interface DeliveryResult {
   terminal: boolean;
   nextStatus: EventStatus;
   retryDelayMs: number | null;
+  deferredUntil?: string;
 }

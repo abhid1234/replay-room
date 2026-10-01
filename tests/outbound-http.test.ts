@@ -35,7 +35,7 @@ describe("pinned outbound HTTP", () => {
         timeoutMs: 1_000,
       });
 
-      expect(response).toEqual({ status: 302, body: "redirect blocked" });
+      expect(response).toEqual({ status: 302, body: "redirect blocked", retryAfter: null });
       expect(received).toEqual({
         method: "POST",
         url: "/webhooks?source=replay-room",
@@ -46,6 +46,30 @@ describe("pinned outbound HTTP", () => {
       expect(redirectedRequests).toBe(0);
     } finally {
       await Promise.all([close(receiver), close(redirectTarget)]);
+    }
+  });
+
+  it("captures only the Retry-After response header needed by the scheduler", async () => {
+    const receiver = createServer((_request, response) => {
+      response.writeHead(429, { "retry-after": "120", "x-private-debug": "do-not-store" }).end("slow down");
+    });
+    const receiverPort = await listen(receiver);
+
+    try {
+      const response = await postPinnedDestination({
+        destination: {
+          url: new URL(`http://receiver.test:${receiverPort}/webhooks`),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+        },
+        headers: {},
+        body: "{}",
+        timeoutMs: 1_000,
+      });
+
+      expect(response).toEqual({ status: 429, body: "slow down", retryAfter: "120" });
+      expect(response).not.toHaveProperty("headers");
+    } finally {
+      await close(receiver);
     }
   });
 

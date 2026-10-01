@@ -26,7 +26,7 @@ Retryable outcomes:
 - HTTP 408, 425, and 429;
 - HTTP 5xx.
 
-Other HTTP 4xx responses are treated as permanent failures and dead-lettered immediately. Retry delays use bounded exponential backoff with jitter.
+Other HTTP 4xx responses are treated as permanent failures and dead-lettered immediately. Retry delays use bounded exponential backoff with jitter. When a retryable response includes `Retry-After`, the worker accepts either delta-seconds or an HTTP date, waits for the longer of the local backoff and receiver hint, and clamps the receiver-directed delay to 15 minutes. The next intent, audit evidence, event transition, and current-intent completion commit atomically before queue dispatch. PostgreSQL's clock re-enforces `availableAt` when a worker claims the job and serializes non-rehearsal processing intents per event; an early or competing BullMQ job is moved back to its authoritative durable time before any outbound request, and an expired sibling lease is revoked before replacement. Production workers reject intent-less payloads. Each transition is fenced by the database-generated processing timestamp, queue payload fields are replaced by the canonical durable job after claim, and a concurrent successful cycle wins over later retry or dead-letter transitions. The audit uses the durable intent's actual availability time, including when crash recovery finds an existing intent.
 
 ## Ingest admission control
 

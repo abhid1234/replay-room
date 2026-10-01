@@ -12,24 +12,45 @@ interface DeliveryDependencies {
   lookupFn?: DestinationLookup;
   now?: () => number;
   timeoutMs?: number;
+  requireIntent?: boolean;
 }
 
 export async function deliver(job: DeliveryJob, deps: DeliveryDependencies): Promise<DeliveryResult> {
+  if (deps.requireIntent && !job.intentId) throw new Error("Production delivery jobs require a durable intent");
   const now = deps.now ?? Date.now;
-  const processingAt = new Date(now()).toISOString();
+  let claimedJob = job;
+  let claimProcessingAt: string | undefined;
   if (job.intentId) {
-    const claimed = await deps.store.claimDeliveryIntent(job.intentId, processingAt);
-    if (!claimed) {
+    const claim = await deps.store.claimDeliveryIntent(job.intentId);
+    if (claim.status === "deferred") {
+      const current = await deps.store.getEvent(claim.intent.eventId);
+      if (!current) throw new Error(`Event ${claim.intent.eventId} does not exist`);
+      if (current.status === "delivered") {
+        await deps.store.completeDeliveryIntent(claim.intent.id, new Date(now()).toISOString());
+        return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
+      }
+      return {
+        delivered: false,
+        terminal: false,
+        nextStatus: current.status,
+        retryDelayMs: claim.delayMs,
+        deferredUntil: claim.retryAt,
+      };
+    }
+    if (claim.status === "unavailable") {
       const current = await deps.store.getEvent(job.eventId);
       if (!current) throw new Error(`Event ${job.eventId} does not exist`);
       return { delivered: current.status === "delivered", terminal: true, nextStatus: current.status, retryDelayMs: null };
     }
+    claimedJob = claim.intent.job;
+    claimProcessingAt = claim.intent.processingAt ?? undefined;
+    if (!claimProcessingAt) throw new Error(`Delivery intent ${claim.intent.id} has no processing claim`);
   }
 
   try {
-    return await deliverClaimed(job, deps, now);
+    return await deliverClaimed(claimedJob, deps, now, claimProcessingAt);
   } catch (error) {
-    if (job.intentId) await deps.store.releaseDeliveryIntentClaim(job.intentId, processingAt);
+    if (job.intentId && claimProcessingAt) await deps.store.releaseDeliveryIntentClaim(job.intentId, claimProcessingAt);
     throw error;
   }
 }
@@ -38,9 +59,15 @@ async function deliverClaimed(
   job: DeliveryJob,
   deps: DeliveryDependencies,
   now: () => number,
+  claimProcessingAt?: string,
 ): Promise<DeliveryResult> {
   const detail = await deps.store.getEvent(job.eventId);
   if (!detail) throw new Error(`Event ${job.eventId} does not exist`);
+
+  if (job.mode !== "rehearsal" && detail.status === "delivered") {
+    await completeIntent(job, deps.store, now(), claimProcessingAt);
+    return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
+  }
 
   const destinationInput = job.destinationUrl ?? detail.endpoint.destinationUrl;
   let destination = safeDestinationLabel(destinationInput);
@@ -51,11 +78,25 @@ async function deliverClaimed(
   const startedAt = now();
 
   if (job.mode !== "rehearsal") {
-    await deps.store.updateEvent(detail.id, { status: "delivering", attemptCount: nextAttempt, lastError: null });
+    const began = await deps.store.beginDeliveryAttempt(
+      detail.id,
+      nextAttempt,
+      job.intentId,
+      claimProcessingAt,
+    );
+    if (!began) {
+      const current = await deps.store.getEvent(detail.id);
+      if (current?.status === "delivered") {
+        await completeIntent(job, deps.store, now(), claimProcessingAt);
+        return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
+      }
+      throw new Error(`Delivery intent ${job.intentId ?? "direct"} lost its processing claim`);
+    }
   }
 
   let statusCode: number | null = null;
   let responseBody: string | null = null;
+  let retryAfter: string | null = null;
   let errorMessage: string | null = null;
   let unsafeDestination = false;
   const body = JSON.stringify(detail.payload);
@@ -89,6 +130,7 @@ async function deliverClaimed(
     });
     statusCode = response.status;
     responseBody = response.body;
+    retryAfter = response.retryAfter;
   } catch (error) {
     unsafeDestination = error instanceof UnsafeDestinationError;
     errorMessage = error instanceof Error ? error.message : "Unknown delivery error";
@@ -122,40 +164,52 @@ async function deliverClaimed(
       reason: job.reason ?? null,
       metadata: { destination, statusCode, durationMs },
     });
-    await completeIntent(job, deps.store, now());
+    await completeIntent(job, deps.store, now(), claimProcessingAt);
     return { delivered: successful, terminal: true, nextStatus: detail.status, retryDelayMs: null };
   }
 
   if (successful) {
-    await deps.store.updateEvent(detail.id, { status: "delivered", lastError: null });
-    await deps.store.addAudit({
+    const outcome = await deps.store.commitDeliveryOutcome({
       eventId: detail.id,
-      action: job.mode === "replay" ? "replay.delivered" : "delivery.succeeded",
-      actor: job.actor ?? "worker",
-      reason: job.reason ?? null,
-      metadata: { destination, statusCode, attempt: nextAttempt, durationMs },
+      status: "delivered",
+      lastError: null,
+      ...(job.intentId ? { currentIntentId: job.intentId } : {}),
+      ...(claimProcessingAt ? { currentIntentProcessingAt: claimProcessingAt } : {}),
+      completedAt: new Date(now()).toISOString(),
+      audit: {
+        eventId: detail.id,
+        action: job.mode === "replay" ? "replay.delivered" : "delivery.succeeded",
+        actor: job.actor ?? "worker",
+        reason: job.reason ?? null,
+        metadata: { destination, statusCode, attempt: nextAttempt, durationMs },
+      },
     });
-    await completeIntent(job, deps.store, now());
-    return { delivered: true, terminal: true, nextStatus: "delivered", retryDelayMs: null };
+    return { delivered: outcome.nextStatus === "delivered", terminal: true, nextStatus: outcome.nextStatus, retryDelayMs: null };
   }
 
   const retryable = !unsafeDestination && (statusCode === null || isRetryableStatus(statusCode));
   const terminal = !retryable || deliveryAttempt >= detail.endpoint.maxAttempts;
   const lastError = errorMessage ?? `Destination returned HTTP ${statusCode}`;
   if (terminal) {
-    await deps.store.updateEvent(detail.id, { status: "dead_letter", lastError });
-    await deps.store.addAudit({
+    const outcome = await deps.store.commitDeliveryOutcome({
       eventId: detail.id,
-      action: "delivery.dead_lettered",
-      actor: "worker",
-      reason: lastError,
-      metadata: { destination, statusCode, attempt: nextAttempt, deliveryAttempt },
+      status: "dead_letter",
+      lastError,
+      ...(job.intentId ? { currentIntentId: job.intentId } : {}),
+      ...(claimProcessingAt ? { currentIntentProcessingAt: claimProcessingAt } : {}),
+      completedAt: new Date(now()).toISOString(),
+      audit: {
+        eventId: detail.id,
+        action: "delivery.dead_lettered",
+        actor: "worker",
+        reason: lastError,
+        metadata: { destination, statusCode, attempt: nextAttempt, deliveryAttempt },
+      },
     });
-    await completeIntent(job, deps.store, now());
-    return { delivered: false, terminal: true, nextStatus: "dead_letter", retryDelayMs: null };
+    return { delivered: outcome.nextStatus === "delivered", terminal: true, nextStatus: outcome.nextStatus, retryDelayMs: null };
   }
 
-  const delayMs = retryDelayMs(deliveryAttempt);
+  const backoffMs = retryDelayMs(deliveryAttempt);
   const { intentId: _completedIntentId, ...retryableJob } = job;
   const retryJob: DeliveryJob = {
     ...retryableJob,
@@ -163,10 +217,39 @@ async function deliverClaimed(
     attemptNumber: deliveryAttempt + 1,
     eventId: detail.id,
   };
-  const availableAt = new Date(now() + delayMs).toISOString();
-  const nextIntent = await deps.store.createDeliveryIntent(deliveryJobKey(retryJob), retryJob, availableAt);
+  const nextIntent = await deps.store.commitRetryTransition({
+    eventId: detail.id,
+    jobKey: deliveryJobKey(retryJob),
+    job: retryJob,
+    backoffMs,
+    retryAfter,
+    ...(job.intentId ? { currentIntentId: job.intentId } : {}),
+    ...(claimProcessingAt ? { currentIntentProcessingAt: claimProcessingAt } : {}),
+    completedAt: new Date(now()).toISOString(),
+    lastError,
+    audit: {
+      eventId: detail.id,
+      action: "delivery.retry_scheduled",
+      actor: "worker",
+      reason: lastError,
+      metadata: {
+        destination,
+        statusCode,
+        deliveryAttempt,
+        nextAttempt: deliveryAttempt + 1,
+      },
+    },
+  });
+  if (!nextIntent.scheduled) {
+    return {
+      delivered: nextIntent.nextStatus === "delivered",
+      terminal: true,
+      nextStatus: nextIntent.nextStatus,
+      retryDelayMs: null,
+    };
+  }
   try {
-    await dispatchDeliveryIntent(deps.store, deps.queue, nextIntent.intent, new Date(now()));
+    await dispatchDeliveryIntent(deps.store, deps.queue, nextIntent.intent);
   } catch (error) {
     console.error(JSON.stringify({
       event: "delivery_retry.dispatch_deferred",
@@ -175,13 +258,13 @@ async function deliverClaimed(
       error: error instanceof Error ? error.message : "Unknown dispatch error",
     }));
   }
-  await deps.store.updateEvent(detail.id, { status: "retrying", lastError });
-  await completeIntent(job, deps.store, now());
-  return { delivered: false, terminal: false, nextStatus: "retrying", retryDelayMs: delayMs };
+  return { delivered: false, terminal: false, nextStatus: "retrying", retryDelayMs: nextIntent.delayMs };
 }
 
-async function completeIntent(job: DeliveryJob, store: Store, nowMs: number): Promise<void> {
-  if (job.intentId) await store.completeDeliveryIntent(job.intentId, new Date(nowMs).toISOString());
+async function completeIntent(job: DeliveryJob, store: Store, nowMs: number, processingAt?: string): Promise<void> {
+  if (!job.intentId) return;
+  const completed = await store.completeDeliveryIntent(job.intentId, new Date(nowMs).toISOString(), processingAt);
+  if (processingAt && !completed) throw new Error(`Delivery intent ${job.intentId} lost its processing claim`);
 }
 
 function safeDestinationLabel(rawUrl: string): string {

@@ -12,6 +12,8 @@ npm run conformance
 
 The build fails if an incident includes a receiver outside the reserved `.example` domain, a signing secret, a credential-like header, a non-synthetic ingest key, or a duplicate case ID. `dataset-manifest.json` contains byte lengths and SHA-256 digests for both JSONL configurations.
 
+The `provider-rate-limit` incident includes two synthetic `429` attempts and the durable `delivery.retry_scheduled` decision derived from `Retry-After: 120`, so consumers can inspect the receiver hint, bounded delay, next attempt, and exact availability time without using real traffic.
+
 ## Publish to Hugging Face
 
 Authenticate with a write-scoped Hugging Face token, then create or reuse the public dataset and upload the prepared directory as one commit:
@@ -21,7 +23,7 @@ hf auth login
 hf repos create abhid1234/replay-room-fixtures --repo-type dataset --public --exist-ok
 hf upload abhid1234/replay-room-fixtures fixtures/huggingface . \
   --repo-type dataset \
-  --commit-message "Publish Replay Room fixture dataset v0.1.0"
+  --commit-message "Publish Replay Room fixture dataset v0.1.1"
 ```
 
 Do not pass a token on the command line or commit one to the repository. After upload, reopen the public dataset, confirm that both `incidents` and `replay_guard` configurations render, and read back the manifest with a fresh download:

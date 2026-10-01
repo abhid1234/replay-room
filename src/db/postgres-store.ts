@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import type { CreateEventInput, CreateEventResult, DeliveryJob, Store } from "../domain/contracts.js";
+import type { ClaimDeliveryIntentResult, CreateEventInput, CreateEventResult, DeliveryIntentSchedule, DeliveryJob, DeliveryOutcomeInput, DeliveryOutcomeResult, RetryTransitionInput, RetryTransitionResult, Store } from "../domain/contracts.js";
+import { assertRetryTransitionIdentity, DELIVERY_INTENT_LEASE_MS, EVENT_BUSY_RETRY_MS, sameDeliveryJob } from "../domain/delivery-intent.js";
 import { deliveryRate, reliabilityState } from "../domain/reliability.js";
+import { parseRetryAfter } from "../domain/retry.js";
 import type {
   AuditEntry,
   DashboardStats,
@@ -180,6 +182,32 @@ export class PostgresStore implements Store {
     );
   }
 
+  async beginDeliveryAttempt(
+    eventId: string,
+    attemptCount: number,
+    currentIntentId?: string,
+    currentIntentProcessingAt?: string,
+  ): Promise<boolean> {
+    if (Boolean(currentIntentId) !== Boolean(currentIntentProcessingAt)) {
+      throw new Error("Delivery attempt requires both the current intent and its processing claim");
+    }
+    const result = await this.pool.query(
+      `UPDATE webhook_events
+       SET status = 'delivering', attempt_count = $2, last_error = NULL, updated_at = now()
+       WHERE id = $1
+         AND status <> 'delivered'
+         AND ($3::uuid IS NULL OR EXISTS (
+           SELECT 1 FROM delivery_intents
+           WHERE id = $3
+             AND event_id = $1
+             AND state = 'processing'
+             AND processing_at = $4
+         ))`,
+      [eventId, attemptCount, currentIntentId ?? null, currentIntentProcessingAt ?? null],
+    );
+    return result.rowCount === 1;
+  }
+
   async addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">): Promise<DeliveryAttempt> {
     const result = await this.pool.query(
       `INSERT INTO delivery_attempts
@@ -219,16 +247,22 @@ export class PostgresStore implements Store {
   async createDeliveryIntent(
     jobKey: string,
     job: DeliveryJob,
-    availableAt = new Date().toISOString(),
+    schedule: DeliveryIntentSchedule = {},
   ): Promise<{ intent: DeliveryIntent; created: boolean }> {
+    const delayMs = schedule.delayMs ?? 0;
+    if (!Number.isSafeInteger(delayMs) || delayMs < 0) throw new Error("Delivery intent delay must be a non-negative integer");
+    if (schedule.availableAt !== undefined && !Number.isFinite(Date.parse(schedule.availableAt))) {
+      throw new Error("Delivery intent availability must be a valid timestamp");
+    }
     const intentId = randomUUID();
     const enrichedJob = { ...job, intentId };
     const inserted = await this.pool.query(
       `INSERT INTO delivery_intents (id, job_key, event_id, job, available_at)
-       VALUES ($1, $2, $3, $4::jsonb, $5)
+       VALUES ($1, $2, $3, $4::jsonb,
+         coalesce($5::timestamptz, date_trunc('milliseconds', clock_timestamp()) + ($6 * interval '1 millisecond')))
        ON CONFLICT (job_key) DO NOTHING
        RETURNING *`,
-      [intentId, jobKey, job.eventId, JSON.stringify(enrichedJob), availableAt],
+      [intentId, jobKey, job.eventId, JSON.stringify(enrichedJob), schedule.availableAt ?? null, delayMs],
     );
     if (inserted.rowCount) {
       return { intent: mapDeliveryIntent(inserted.rows[0] as Row), created: true };
@@ -238,31 +272,183 @@ export class PostgresStore implements Store {
     return { intent: mapDeliveryIntent(existing.rows[0] as Row), created: false };
   }
 
-  async listDispatchableIntents(nowIso: string, staleBeforeIso: string, limit = 500): Promise<DeliveryIntent[]> {
+  async commitRetryTransition(input: RetryTransitionInput): Promise<RetryTransitionResult> {
+    assertRetryTransitionIdentity(input);
+    if (!Number.isSafeInteger(input.backoffMs) || input.backoffMs < 0) throw new Error("Retry backoff must be a non-negative integer");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const lockedEvent = await client.query(
+        "SELECT id, status FROM webhook_events WHERE id = $1 FOR UPDATE",
+        [input.eventId],
+      );
+      if (!lockedEvent.rowCount) throw new Error(`Event ${input.eventId} does not exist`);
+      const nextStatus = lockedEvent.rows[0]!.status as WebhookEvent["status"];
+      const clock = await client.query("SELECT clock_timestamp() AS now");
+      const plannedAt = iso(clock.rows[0]!.now);
+      const receiverDelayMs = parseRetryAfter(input.retryAfter, Date.parse(plannedAt));
+      const proposedDelayMs = Math.max(input.backoffMs, receiverDelayMs ?? 0);
+      const proposedStrategy = receiverDelayMs !== null && receiverDelayMs >= input.backoffMs ? "retry-after" : "backoff";
+      const proposedAvailableAt = new Date(Date.parse(plannedAt) + proposedDelayMs).toISOString();
+      await completeCurrentIntent(
+        client,
+        input.eventId,
+        input.currentIntentId,
+        input.currentIntentProcessingAt,
+        input.completedAt,
+      );
+      if (nextStatus === "delivered") {
+        await client.query("COMMIT");
+        return { scheduled: false, nextStatus };
+      }
+
+      const intentId = randomUUID();
+      const enrichedJob = { ...input.job, intentId };
+      const inserted = await client.query(
+        `INSERT INTO delivery_intents (id, job_key, event_id, job, available_at)
+         VALUES ($1, $2, $3, $4::jsonb, $5)
+         ON CONFLICT (job_key) DO NOTHING
+         RETURNING *`,
+        [intentId, input.jobKey, input.eventId, JSON.stringify(enrichedJob), proposedAvailableAt],
+      );
+      const created = Boolean(inserted.rowCount);
+      const existing = created
+        ? null
+        : await client.query(
+          "SELECT * FROM delivery_intents WHERE job_key = $1 AND event_id = $2 FOR UPDATE",
+          [input.jobKey, input.eventId],
+        );
+      if (!created && !existing?.rowCount) throw new Error(`Retry intent ${input.jobKey} belongs to a different event`);
+      const intent = mapDeliveryIntent((created ? inserted.rows[0] : existing!.rows[0]) as Row);
+      if (!sameDeliveryJob(intent.job, input.job)) throw new Error(`Retry intent ${input.jobKey} contains a different job`);
+      if (intent.state === "completed") {
+        await client.query("COMMIT");
+        return { scheduled: false, nextStatus };
+      }
+      const effectiveDelayMs = Math.max(0, Date.parse(intent.availableAt) - Date.parse(plannedAt));
+      const metadata = retryAuditMetadata(
+        input,
+        intent,
+        created,
+        effectiveDelayMs,
+        proposedDelayMs,
+        proposedStrategy,
+        receiverDelayMs,
+      );
+
+      await client.query(
+        `INSERT INTO audit_log (event_id, action, actor, reason, metadata)
+         SELECT $1, $2, $3, $4, $5::jsonb
+         WHERE NOT EXISTS (
+           SELECT 1 FROM audit_log
+           WHERE event_id = $1 AND action = $2 AND metadata ->> 'jobKey' = $6
+         )`,
+        [input.eventId, input.audit.action, input.audit.actor, input.audit.reason, JSON.stringify(metadata), input.jobKey],
+      );
+      await client.query(
+        `UPDATE webhook_events
+         SET status = 'retrying', last_error = $2, updated_at = now()
+         WHERE id = $1`,
+        [input.eventId, input.lastError],
+      );
+      await client.query("COMMIT");
+      return { scheduled: true, intent, created, delayMs: effectiveDelayMs };
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(JSON.stringify({
+          event: "retry_transition.rollback_failed",
+          eventId: input.eventId,
+          error: rollbackError instanceof Error ? rollbackError.message : "Unknown rollback error",
+        }));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async commitDeliveryOutcome(input: DeliveryOutcomeInput): Promise<DeliveryOutcomeResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const lockedEvent = await client.query("SELECT id, status FROM webhook_events WHERE id = $1 FOR UPDATE", [input.eventId]);
+      if (!lockedEvent.rowCount) throw new Error(`Event ${input.eventId} does not exist`);
+      const currentStatus = lockedEvent.rows[0]!.status as WebhookEvent["status"];
+      await completeCurrentIntent(
+        client,
+        input.eventId,
+        input.currentIntentId,
+        input.currentIntentProcessingAt,
+        input.completedAt,
+      );
+
+      if (currentStatus === "delivered" && input.status === "dead_letter") {
+        await client.query("COMMIT");
+        return { applied: false, nextStatus: currentStatus };
+      }
+
+      await client.query(
+        `UPDATE webhook_events
+         SET status = $2, last_error = $3, updated_at = now()
+         WHERE id = $1`,
+        [input.eventId, input.status, input.lastError],
+      );
+      await client.query(
+        `INSERT INTO audit_log (event_id, action, actor, reason, metadata)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [input.eventId, input.audit.action, input.audit.actor, input.audit.reason, JSON.stringify(input.audit.metadata)],
+      );
+      await client.query("COMMIT");
+      return { applied: true, nextStatus: input.status };
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(JSON.stringify({
+          event: "delivery_outcome.rollback_failed",
+          eventId: input.eventId,
+          error: rollbackError instanceof Error ? rollbackError.message : "Unknown rollback error",
+        }));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listDispatchableIntents(limit = 500): Promise<DeliveryIntent[]> {
     const result = await this.pool.query(
       `SELECT * FROM delivery_intents
-       WHERE available_at <= $1
+       WHERE available_at <= clock_timestamp()
          AND (state = 'pending'
-           OR (state = 'dispatched' AND dispatched_at < $2)
-           OR (state = 'processing' AND processing_at < $2))
+           OR (state = 'dispatched' AND dispatched_at < clock_timestamp() - ($1 * interval '1 millisecond'))
+           OR (state = 'processing' AND processing_at < clock_timestamp() - ($1 * interval '1 millisecond')))
        ORDER BY available_at ASC, created_at ASC
-       LIMIT $3`,
-      [nowIso, staleBeforeIso, limit],
+       LIMIT $2`,
+      [DELIVERY_INTENT_LEASE_MS, limit],
     );
     return result.rows.map((row) => mapDeliveryIntent(row as Row));
   }
 
-  async prepareDeliveryIntentDispatch(id: string, dispatchedAt: string, staleBeforeIso: string): Promise<boolean> {
+  async prepareDeliveryIntentDispatch(id: string) {
     const result = await this.pool.query(
       `UPDATE delivery_intents
-       SET state = 'dispatched', dispatched_at = $2, processing_at = NULL
+       SET state = 'dispatched', dispatched_at = date_trunc('milliseconds', clock_timestamp()), processing_at = NULL
        WHERE id = $1
          AND (state = 'pending'
-           OR (state = 'dispatched' AND dispatched_at < $3)
-           OR (state = 'processing' AND processing_at < $3))`,
-      [id, dispatchedAt, staleBeforeIso],
+           OR (state = 'dispatched' AND dispatched_at < clock_timestamp() - ($2 * interval '1 millisecond'))
+           OR (state = 'processing' AND processing_at < clock_timestamp() - ($2 * interval '1 millisecond')))
+       RETURNING dispatched_at,
+         greatest(0, ceil(extract(epoch FROM (available_at - dispatched_at)) * 1000))::bigint AS delay_ms`,
+      [id, DELIVERY_INTENT_LEASE_MS],
     );
-    return (result.rowCount ?? 0) === 1;
+    if (!result.rowCount) return null;
+    return {
+      dispatchedAt: iso(result.rows[0]!.dispatched_at),
+      delayMs: Number(result.rows[0]!.delay_ms),
+    };
   }
 
   async releaseDeliveryIntent(id: string, dispatchedAt: string): Promise<void> {
@@ -274,14 +460,126 @@ export class PostgresStore implements Store {
     );
   }
 
-  async claimDeliveryIntent(id: string, processingAt: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE delivery_intents
-       SET state = 'processing', processing_at = $2
-       WHERE id = $1 AND state = 'dispatched'`,
-      [id, processingAt],
-    );
-    return (result.rowCount ?? 0) === 1;
+  async claimDeliveryIntent(id: string): Promise<ClaimDeliveryIntentResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const identity = await client.query("SELECT event_id FROM delivery_intents WHERE id = $1", [id]);
+      if (!identity.rowCount) {
+        await client.query("COMMIT");
+        return { status: "unavailable" };
+      }
+      const eventId = String(identity.rows[0]!.event_id);
+      const event = await client.query("SELECT id, status FROM webhook_events WHERE id = $1 FOR UPDATE", [eventId]);
+      if (!event.rowCount) {
+        await client.query("COMMIT");
+        return { status: "unavailable" };
+      }
+      const candidateResult = await client.query("SELECT * FROM delivery_intents WHERE id = $1 FOR UPDATE", [id]);
+      if (!candidateResult.rowCount) {
+        await client.query("COMMIT");
+        return { status: "unavailable" };
+      }
+      const candidate = mapDeliveryIntent(candidateResult.rows[0] as Row);
+      if (candidate.state !== "dispatched") {
+        await client.query("COMMIT");
+        return { status: "unavailable" };
+      }
+      const clock = await client.query("SELECT clock_timestamp() AS now");
+      const databaseNow = iso(clock.rows[0]!.now);
+      if (event.rows[0]!.status === "delivered" && candidate.job.mode !== "rehearsal") {
+        await client.query(
+          "UPDATE delivery_intents SET state = 'completed', completed_at = $2 WHERE id = $1 AND state = 'dispatched'",
+          [id, databaseNow],
+        );
+        await client.query("COMMIT");
+        return { status: "unavailable" };
+      }
+      if (candidate.job.mode !== "rehearsal") {
+        const cycleId = candidate.job.cycleId ?? candidate.job.mode;
+        const attemptNumber = candidate.job.attemptNumber ?? 1;
+        const siblings = await client.query(
+          `SELECT job FROM delivery_intents
+           WHERE event_id = $1
+             AND id <> $2
+             AND state IN ('pending', 'dispatched', 'processing', 'completed')`,
+          [eventId, id],
+        );
+        const superseded = siblings.rows.some((row) => {
+          const sibling = row.job as DeliveryJob;
+          return sibling.mode !== "rehearsal"
+            && (sibling.cycleId ?? sibling.mode) === cycleId
+            && (sibling.attemptNumber ?? 1) > attemptNumber;
+        });
+        if (superseded) {
+          await client.query(
+            "UPDATE delivery_intents SET state = 'completed', completed_at = $2 WHERE id = $1 AND state = 'dispatched'",
+            [id, databaseNow],
+          );
+          await client.query("COMMIT");
+          return { status: "unavailable" };
+        }
+      }
+      if (Date.parse(candidate.availableAt) > Date.parse(databaseNow)) {
+        const delayMs = Math.max(0, Date.parse(candidate.availableAt) - Date.parse(databaseNow));
+        await client.query("COMMIT");
+        return { status: "deferred", intent: candidate, retryAt: candidate.availableAt, delayMs, reason: "not-yet-available" };
+      }
+
+      if (candidate.job.mode !== "rehearsal") {
+        const staleBefore = new Date(Date.parse(databaseNow) - DELIVERY_INTENT_LEASE_MS).toISOString();
+        await client.query(
+          `UPDATE delivery_intents
+           SET state = 'completed', completed_at = $3
+           WHERE event_id = $1
+             AND id <> $2
+             AND state = 'processing'
+             AND processing_at < $4
+             AND job ->> 'mode' <> 'rehearsal'`,
+          [eventId, id, databaseNow, staleBefore],
+        );
+        const active = await client.query(
+          `SELECT 1 FROM delivery_intents
+           WHERE event_id = $1
+             AND id <> $2
+             AND state = 'processing'
+             AND processing_at >= $3
+             AND job ->> 'mode' <> 'rehearsal'
+           LIMIT 1`,
+          [eventId, id, staleBefore],
+        );
+        if (active.rowCount) {
+          const retryAt = new Date(Date.parse(databaseNow) + EVENT_BUSY_RETRY_MS).toISOString();
+          await client.query("COMMIT");
+          return { status: "deferred", intent: candidate, retryAt, delayMs: EVENT_BUSY_RETRY_MS, reason: "event-busy" };
+        }
+      }
+
+      const claimed = await client.query(
+        `UPDATE delivery_intents
+         SET state = 'processing', processing_at = $2
+         WHERE id = $1 AND state = 'dispatched'
+         RETURNING *`,
+        [id, databaseNow],
+      );
+      await client.query("COMMIT");
+      return claimed.rowCount
+        ? { status: "claimed", intent: mapDeliveryIntent(claimed.rows[0] as Row) }
+        : { status: "unavailable" };
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error(JSON.stringify({
+          event: "delivery_intent_claim.rollback_failed",
+          intentId: id,
+          error: rollbackError instanceof Error ? rollbackError.message : "Unknown rollback error",
+        }));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async releaseDeliveryIntentClaim(id: string, processingAt: string): Promise<void> {
@@ -293,29 +591,33 @@ export class PostgresStore implements Store {
     );
   }
 
-  async completeDeliveryIntent(id: string, completedAt: string): Promise<void> {
-    await this.pool.query(
+  async completeDeliveryIntent(id: string, completedAt: string, processingAt?: string): Promise<boolean> {
+    const result = await this.pool.query(
       `UPDATE delivery_intents
        SET state = 'completed', completed_at = $2
-       WHERE id = $1 AND state <> 'completed'`,
-      [id, completedAt],
+       WHERE id = $1
+         AND state <> 'completed'
+         AND (($3::timestamptz IS NULL AND state IN ('pending', 'dispatched'))
+           OR (state = 'processing' AND processing_at = $3))`,
+      [id, completedAt, processingAt ?? null],
     );
+    return result.rowCount === 1;
   }
 
-  async deliveryIntentStats(staleBeforeIso: string): Promise<DeliveryIntentStats> {
+  async deliveryIntentStats(): Promise<DeliveryIntentStats> {
     const result = await this.pool.query(
       `SELECT
          count(*) FILTER (WHERE state = 'pending')::int AS pending,
          count(*) FILTER (WHERE state = 'dispatched')::int AS dispatched,
          count(*) FILTER (WHERE state = 'processing')::int AS processing,
          count(*) FILTER (WHERE
-           (state = 'pending' AND available_at < $1)
-           OR (state = 'dispatched' AND dispatched_at < $1)
-           OR (state = 'processing' AND processing_at < $1)
+           (state = 'pending' AND available_at < clock_timestamp() - ($1 * interval '1 millisecond'))
+           OR (state = 'dispatched' AND dispatched_at < clock_timestamp() - ($1 * interval '1 millisecond'))
+           OR (state = 'processing' AND processing_at < clock_timestamp() - ($1 * interval '1 millisecond'))
          )::int AS stale
        FROM delivery_intents
        WHERE state <> 'completed'`,
-      [staleBeforeIso],
+      [DELIVERY_INTENT_LEASE_MS],
     );
     const row = result.rows[0] as Row;
     return {
@@ -438,6 +740,50 @@ function mapDeliveryIntent(row: Row): DeliveryIntent {
     completedAt: row.completed_at === null ? null : iso(row.completed_at),
     createdAt: iso(row.created_at),
   };
+}
+
+function retryAuditMetadata(
+  input: RetryTransitionInput,
+  intent: DeliveryIntent,
+  created: boolean,
+  effectiveDelayMs: number,
+  proposedDelayMs: number,
+  proposedStrategy: "backoff" | "retry-after",
+  receiverDelayMs: number | null,
+): Record<string, unknown> {
+  return {
+    ...input.audit.metadata,
+    jobKey: input.jobKey,
+    intentCreated: created,
+    delayMs: effectiveDelayMs,
+    strategy: created ? proposedStrategy : "existing-intent",
+    receiverDelayMs,
+    availableAt: intent.availableAt,
+    ...(!created ? { proposedDelayMs, proposedStrategy } : {}),
+  };
+}
+
+async function completeCurrentIntent(
+  client: pg.PoolClient,
+  eventId: string,
+  intentId: string | undefined,
+  processingAt: string | undefined,
+  completedAt: string,
+): Promise<void> {
+  if (Boolean(intentId) !== Boolean(processingAt)) {
+    throw new Error("Delivery transition requires both the current intent and its processing claim");
+  }
+  if (!intentId || !processingAt) return;
+  const completed = await client.query(
+    `UPDATE delivery_intents
+     SET state = 'completed', completed_at = $2
+     WHERE id = $1
+       AND event_id = $3
+       AND state = 'processing'
+       AND processing_at = $4`,
+    [intentId, completedAt, eventId, processingAt],
+  );
+  if (completed.rowCount !== 1) throw new Error(`Delivery intent ${intentId} lost its processing claim`);
 }
 
 function isUniqueViolation(error: unknown): boolean {

@@ -7,7 +7,8 @@ All notable changes to Replay Room are documented here.
 ### Added
 
 - a side-effect-free replay preflight with an eight-condition operator decision trace;
-- a DNS-pinned, dual-stack outbound HTTP client that preserves the original Host and TLS identity without following redirects or reusing a connection across validations.
+- a DNS-pinned, dual-stack outbound HTTP client that preserves the original Host and TLS identity without following redirects or reusing a connection across validations;
+- receiver-aware retry planning with bounded `Retry-After` support, database-enforced availability, per-event send serialization, and atomic audit evidence.
 
 ### Changed
 
