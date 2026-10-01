@@ -29,9 +29,9 @@ export async function reconcileOnce({ store, queue, retentionDays, now = new Dat
       attemptNumber: event.attemptCount + 1,
       reason: "reconciled-pending-delivery",
     } as const;
-    await store.createDeliveryIntent(deliveryJobKey(job), job, now.toISOString());
+    await store.createDeliveryIntent(deliveryJobKey(job), job);
   }
-  const dispatch = await dispatchReadyIntents(store, queue, now);
+  const dispatch = await dispatchReadyIntents(store, queue);
 
   const retentionBefore = new Date(now.getTime() - retentionDays * 86_400_000).toISOString();
   const deleted = await store.deleteOlderThan(retentionBefore);

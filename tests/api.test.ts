@@ -408,7 +408,7 @@ describe("webhook API", () => {
       payload: { type: "fabric.test" },
       payloadSha256: "d".repeat(64),
     });
-    await store.createDeliveryIntent("stale-fabric-intent", { eventId: created.event.id, mode: "live" }, "2020-01-01T00:00:00.000Z");
+    await store.createDeliveryIntent("stale-fabric-intent", { eventId: created.event.id, mode: "live" }, { availableAt: "2020-01-01T00:00:00.000Z" });
     const app = await buildApp({ config, store, queue });
     apps.push(app);
 

@@ -95,12 +95,13 @@ describe("free-tier runtime", () => {
     });
     const job = { eventId: created.event.id, mode: "live", cycleId: "live", attemptNumber: 1 } as const;
     const now = new Date("2026-09-27T12:00:00.000Z");
+    store.now = () => now.getTime();
     queue.failNext = true;
 
-    await expect(scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job), now })).rejects.toThrow("simulated queue outage");
+    await expect(scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) })).rejects.toThrow("simulated queue outage");
     expect([...store.intents.values()][0]?.state).toBe("pending");
 
-    const recovered = await dispatchReadyIntents(store, queue, now);
+    const recovered = await dispatchReadyIntents(store, queue);
     expect(recovered).toEqual({ dispatched: 1, failed: 0 });
     expect(queue.jobs).toHaveLength(1);
     expect([...store.intents.values()][0]?.state).toBe("dispatched");

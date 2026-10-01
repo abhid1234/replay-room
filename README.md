@@ -160,6 +160,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Literal and DNS-resolved private, loopback, link-local, reserved, credential-bearing, and non-HTTP destinations are blocked in production.
 - Outbound sockets are pinned to the validated address set while preserving the original Host header and TLS server name; redirects are returned as terminal responses instead of being followed to an unchecked target, and connections are never pooled across validations.
 - The 10-second network deadline covers both DNS resolution and the HTTP exchange; an expired DNS phase cancels its underlying resolver work.
+- Retryable responses honor `Retry-After` delta-seconds or HTTP dates, never retry earlier than local exponential backoff, clamp receiver-directed waits to 15 minutes, and atomically persist the next intent with its audit evidence before dispatch. PostgreSQL enforces the durable availability timestamp again at claim time and serializes non-rehearsal sends per event; processing-claim fencing and delivered-wins precedence prevent stale or concurrent cycles from regressing state or issuing a second outbound request.
 - Response capture is bounded to 4 KiB before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
 - Postgres-backed delivery-intent claims suppress duplicate queue execution and preserve exact replay metadata through Key Value loss.

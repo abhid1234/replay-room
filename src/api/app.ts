@@ -125,8 +125,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
   app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
     const databaseStartedAt = Date.now();
     const now = Date.now();
-    const staleBefore = new Date(now - 5 * 60_000).toISOString();
-    const [, intentOutbox] = await Promise.all([store.ping(), store.deliveryIntentStats(staleBefore)]);
+    const [, intentOutbox] = await Promise.all([store.ping(), store.deliveryIntentStats()]);
     const databaseLatencyMs = Date.now() - databaseStartedAt;
     const queueHealth = await queue.health();
     return {
@@ -290,7 +289,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       },
     });
     if (scheduled.intent.state !== "completed") {
-      await dispatchDeliveryIntent(store, queue, scheduled.intent, new Date());
+      await dispatchDeliveryIntent(store, queue, scheduled.intent);
     }
     reply.code(202);
     return { queued: true, eventId: id, mode: "replay", deliveryIntentId: scheduled.intent.id, duplicate: !scheduled.created };

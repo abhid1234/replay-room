@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { Worker } from "bullmq";
+import { DelayedError, Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { loadConfig } from "./config.js";
 import { PostgresStore } from "./db/postgres-store.js";
@@ -30,7 +30,14 @@ export function createDeliveryWorker({
   const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
   const worker = new Worker<DeliveryJob>(
     DELIVERY_QUEUE,
-    async (job) => deliver(job.data, { store, queue, allowPrivateTargets }),
+    async (job) => {
+      const result = await deliver(job.data, { store, queue, allowPrivateTargets, requireIntent: true });
+      if (result.deferredUntil) {
+        await job.moveToDelayed(Date.now() + Math.max(1, result.retryDelayMs ?? 0), job.token);
+        throw new DelayedError();
+      }
+      return result;
+    },
     { connection, concurrency, lockDuration: 30_000 },
   );
 

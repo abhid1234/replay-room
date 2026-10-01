@@ -14,6 +14,7 @@ export interface DestinationPostRequest {
 export interface DestinationPostResponse {
   status: number;
   body: string;
+  retryAfter: string | null;
 }
 
 export type DestinationPost = (request: DestinationPostRequest) => Promise<DestinationPostResponse>;
@@ -55,6 +56,7 @@ export const postPinnedDestination: DestinationPost = ({ destination, headers, b
         resolve({
           status: incoming.statusCode ?? 0,
           body: decodeCapturedBody(chunks),
+          retryAfter: firstHeader(incoming.headers["retry-after"]),
         });
       };
 
@@ -138,4 +140,8 @@ function decodeCapturedBody(chunks: Buffer[]): string {
     capturedBytes += characterBytes;
   }
   return captured.join("");
+}
+
+function firstHeader(value: string | string[] | undefined): string | null {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }

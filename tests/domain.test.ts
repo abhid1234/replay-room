@@ -6,7 +6,7 @@ import { assessReplayRisk } from "../src/domain/replay-risk.js";
 import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
-import { isRetryableStatus, retryDelayMs } from "../src/domain/retry.js";
+import { isRetryableStatus, MAX_RETRY_AFTER_MS, parseRetryAfter, planRetry, retryDelayMs } from "../src/domain/retry.js";
 import { assertSafeDestination, createDestinationLookup, redactHeaders, resolveSafeDestination, sha256, signPayload, signWebhookPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
 import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
@@ -78,6 +78,20 @@ describe("retry policy", () => {
   });
   it("retries transient statuses only", () => {
     expect(isRetryableStatus(429)).toBe(true); expect(isRetryableStatus(503)).toBe(true); expect(isRetryableStatus(422)).toBe(false);
+  });
+  it("plans retries from delta-seconds and HTTP-date receiver hints", () => {
+    const now = Date.parse("2026-09-30T20:00:00.000Z");
+    const policy = { baseDelayMs: 1_000, maxDelayMs: 60_000, jitterRatio: 0 };
+    expect(planRetry(1, "120", now, policy, () => 0.5)).toEqual({ delayMs: 120_000, source: "retry-after", receiverDelayMs: 120_000 });
+    expect(planRetry(1, "Wed, 30 Sep 2026 20:02:00 GMT", now, policy, () => 0.5)).toEqual({ delayMs: 120_000, source: "retry-after", receiverDelayMs: 120_000 });
+    expect(planRetry(2, "not-a-date", now, policy, () => 0.5)).toEqual({ delayMs: 2_000, source: "backoff", receiverDelayMs: null });
+    expect(planRetry(3, "1", now, policy, () => 0.5)).toEqual({ delayMs: 4_000, source: "backoff", receiverDelayMs: 1_000 });
+  });
+  it("clamps hostile Retry-After values and ignores past dates", () => {
+    const now = Date.parse("2026-09-30T20:00:00.000Z");
+    expect(parseRetryAfter("999999999999999999999", now)).toBe(MAX_RETRY_AFTER_MS);
+    expect(parseRetryAfter("Wed, 30 Sep 2020 20:00:00 GMT", now)).toBe(0);
+    expect(parseRetryAfter("-10", now)).toBeNull();
   });
 });
 
