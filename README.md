@@ -92,6 +92,8 @@ A replay is accepted only when all of these are true:
 
 Every approval and rejection records the risk level and acknowledgement in the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
+Before approval, the console runs a side-effect-free replay preflight and renders all eight guard conditions as pass, fail, or pending: operator reason, identity, rehearsal existence and outcome, payload binding, destination binding, dead-letter state, and duplicate-risk acknowledgement. Changing any input invalidates the visible decision and disables approval until the guard is checked again. The replay endpoint independently reevaluates the same guard, so the UI is guidance rather than authority. The newest rehearsal is authoritative—even an older passing rehearsal cannot bypass a newer failure.
+
 ## Quick start
 
 Prerequisites: Node.js 22+, Docker, and Docker Compose.
@@ -192,9 +194,10 @@ GitHub Actions runs the repository verification gate on every branch push and pu
 3. Let the worker exhaust retries into `dead_letter`.
 4. Open the flight-recorder diagnosis and complete attempt timeline.
 5. Rehearse against the accepting sink.
-6. Try to replay to a different destination and show the deterministic guard rejection.
-7. Replay to the rehearsed destination with an operator reason.
-8. Open `render.yaml` and map each behavior to its Render service.
+6. Run replay preflight and inspect the eight-condition decision trace.
+7. Change the destination and show the preflight invalidate and block approval.
+8. Restore the rehearsed destination, acknowledge any duplicate risk, and replay with an operator reason.
+9. Open `render.yaml` and map each behavior to its Render service.
 
 ## Status
 
