@@ -55,7 +55,7 @@ jobs:
       - uses: actions/attest-build-provenance@v3
         with:
           subject-path: ${{ steps.pack.outputs.tarball }}
-      - uses: actions/attest-sbom@v3
+      - uses: actions/attest-sbom@v4
         with:
           subject-path: ${{ steps.pack.outputs.tarball }}
           sbom-path: sbom.cdx.json
