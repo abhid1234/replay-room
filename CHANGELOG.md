@@ -4,6 +4,8 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+## 0.1.2 - 2026-10-01
+
 ### Added
 
 - a side-effect-free replay preflight with an eight-condition operator decision trace;
@@ -13,7 +15,8 @@ All notable changes to Replay Room are documented here.
 ### Changed
 
 - the newest rehearsal result is authoritative, so an older passing rehearsal cannot bypass a later failure;
-- one delivery deadline now covers cancellable DNS resolution and the HTTP exchange, and outbound response capture is bounded to 4 KiB before it enters the incident ledger.
+- one delivery deadline now covers cancellable DNS resolution and the HTTP exchange, and outbound response capture is bounded to 4 KiB before it enters the incident ledger;
+- release verification now rejects version drift across the package, lockfile, OpenAPI contract, console workspace, and fixture corpus.
 
 ## 0.1.1 - 2026-09-27
 

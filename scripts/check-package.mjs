@@ -4,12 +4,30 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { assertVersionSurfaces } from "./check-version-surfaces.mjs";
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "replay-room-package-"));
 const environment = { ...process.env, npm_config_cache: join(tmpdir(), "replay-room-npm-cache") };
 
 try {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+  const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+  const webPackage = JSON.parse(readFileSync("web/package.json", "utf8"));
+  const fixtureManifest = JSON.parse(readFileSync("fixtures/manifest.json", "utf8"));
+  const datasetManifest = JSON.parse(readFileSync("fixtures/huggingface/dataset-manifest.json", "utf8"));
+  const { openApiDocument } = await import(pathToFileURL(join(process.cwd(), "dist/api/openapi.js")).href);
+
+  const versionSurfaces = {
+    packageLock: packageLock.version,
+    packageLockRoot: packageLock.packages?.[""]?.version,
+    packageLockWeb: packageLock.packages?.web?.version,
+    web: webPackage.version,
+    openApi: openApiDocument.info.version,
+    fixtures: fixtureManifest.version,
+    dataset: datasetManifest.version,
+  };
+  assertVersionSurfaces(packageJson.version, versionSurfaces);
+
   const output = execFileSync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryDirectory], {
     encoding: "utf8",
     env: environment,
@@ -66,7 +84,7 @@ try {
     contentSha256: bundle.integrity.contentSha256,
   });
 
-  console.log(JSON.stringify({ package: "passed", name: pack.name, version: pack.version, files: pack.entryCount, size: pack.size, installSmoke: true }));
+  console.log(JSON.stringify({ package: "passed", name: pack.name, version: pack.version, versionSurfaces: Object.keys(versionSurfaces).length, files: pack.entryCount, size: pack.size, installSmoke: true }));
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }
