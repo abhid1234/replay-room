@@ -18,7 +18,14 @@ function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
-function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com' } = {}) {
+const SPACE_PROOF_LINKS = [
+  'https://replay-room-web.onrender.com',
+  'https://replay-room-api.onrender.com/openapi.json',
+  'https://github.com/abhid1234/replay-room',
+  'https://huggingface.co/datasets/abhid1234/replay-room-fixtures',
+];
+
+function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com', spaceCapabilityLeak = '', missingProof = '' } = {}) {
   let healthAttempts = 0;
   return async (input, init = {}) => {
     const url = String(input);
@@ -35,6 +42,13 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
     if (url === 'https://console.example.com' && method === 'GET') {
       return new Response('<!doctype html><title>Replay Room</title><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } });
     }
+    if (url === 'https://space.example.com' && method === 'GET') {
+      return new Response('<!doctype html><title>Replay Room</title><script type="module" src="/assets/index.js"></script><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } });
+    }
+    if (url === 'https://space.example.com/assets/index.js' && method === 'GET') {
+      const proof = SPACE_PROOF_LINKS.filter((link) => link !== missingProof).join(' ');
+      return new Response(`Public simulation No admin token is collected The demo is static. The evidence chain is not. ${proof} ${spaceCapabilityLeak}`, { status: 200, headers: { 'content-type': 'text/javascript' } });
+    }
     if (url === 'https://api.example.com/api/stats' && method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: {
         'access-control-allow-origin': corsOrigin,
@@ -49,6 +63,7 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
 const config = {
   apiUrl: 'https://api.example.com',
   siteUrl: 'https://console.example.com',
+  spaceUrl: 'https://space.example.com',
   expectedVersion: '0.1.1',
   timeoutMs: 10_000,
   intervalMs: 1_000,
@@ -66,12 +81,13 @@ test('parses required targets and timing overrides', () => {
   assert.deepEqual(parseArgs([
     '--api', 'https://api.example.com/',
     '--site', 'https://console.example.com',
+    '--space', 'https://space.example.com/',
     '--timeout-ms', '90000',
     '--interval-ms', '2000',
     '--request-timeout-ms', '7000',
     '--expected-version', '0.1.1',
   ]), {
-    apiUrl: 'https://api.example.com', siteUrl: 'https://console.example.com', expectedVersion: '0.1.1',
+    apiUrl: 'https://api.example.com', siteUrl: 'https://console.example.com', spaceUrl: 'https://space.example.com', expectedVersion: '0.1.1',
     timeoutMs: 90_000, intervalMs: 2_000, requestTimeoutMs: 7_000,
   });
 });
@@ -87,6 +103,12 @@ test('waits through a cold start and verifies health, contract, console, and COR
   assert.deepEqual(result.coldStart, { attempts: 3, warmAfterMs: 2_000 });
   assert.equal(result.checks.health.databaseLatencyMs, 4);
   assert.equal(result.checks.openApi.requiredPaths, 9);
+  assert.deepEqual(result.checks.space, {
+    demoMode: true,
+    credentialSurface: 'none',
+    proofLinks: 4,
+    scriptUrl: 'https://space.example.com/assets/index.js',
+  });
   assert.equal(result.checks.cors.origin, 'https://console.example.com');
 });
 
@@ -101,5 +123,19 @@ test('fails closed when the API does not allow the deployed console origin', asy
   await assert.rejects(
     runLiveCheck(config, { fetch: fixtureFetch({ corsOrigin: 'https://wrong.example.com' }) }),
     /CORS origin.*expected/,
+  );
+});
+
+test('fails closed when the Space bundle exposes operator capability', async () => {
+  await assert.rejects(
+    runLiveCheck(config, { fetch: fixtureFetch({ spaceCapabilityLeak: '/api/events' }) }),
+    /exposes operator-console capability.*api\/events/,
+  );
+});
+
+test('fails closed when the Space bundle loses a public proof link', async () => {
+  await assert.rejects(
+    runLiveCheck(config, { fetch: fixtureFetch({ missingProof: SPACE_PROOF_LINKS[3] }) }),
+    /missing proof links.*replay-room-fixtures/,
   );
 });
