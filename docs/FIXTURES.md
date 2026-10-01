@@ -41,3 +41,5 @@ Compare the downloaded manifest with `fixtures/huggingface/dataset-manifest.json
 The public dataset is live at <https://huggingface.co/datasets/abhid1234/replay-room-fixtures>. The initial dataset commit is `9e343c2930f2dd6a3b795cc58df99224c685da23`.
 
 On 2026-09-29, a fresh download reproduced all four prepared files byte-for-byte. An unauthenticated download of `dataset-manifest.json` produced SHA-256 `c37ad0cab7e5dc2d34c6a526cf8fa20acea613640817e756a33108b062a29fac`, matching the checked-in manifest.
+
+Dataset version `0.1.2` was published on 2026-10-01 at commit `dfd09d101e0c4c281d156c395b9b001f9d11fdfe`. A fresh anonymous readback of `dataset-manifest.json` matched the checked-in file byte-for-byte at SHA-256 `fabe8f833b133c9580d822bf8340cceb3b29dadd054acf5b2c8d30e442096e80`.
