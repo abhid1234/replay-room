@@ -47,14 +47,14 @@ EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npm run evidence:verify -- ./
 
 The command prints machine-readable JSON and exits non-zero for a modified or malformed bundle.
 
-The same validator is release-built as the publish-ready `@avee1234/replay-room` package. After registry publication is enabled, it will be available through:
+The same validator is packaged as `@avee1234/replay-room`. When a release is present in the npm registry, it can be run through:
 
 ```bash
 npx @avee1234/replay-room inspect ./incident.evidence.json
 EVIDENCE_SIGNING_SECRET="$EVIDENCE_SIGNING_SECRET" npx @avee1234/replay-room verify ./incident.evidence.json
 ```
 
-The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. Exact tarballs are available from [GitHub Releases](https://github.com/abhid1234/replay-room/releases) with CycloneDX SBOMs and signed SLSA and SBOM attestations. npm publication remains human-gated; this repository does not claim that the package is already in the registry.
+The package includes TypeScript exports, the `replay-room.evidence/v1` JSON Schema, synthetic incident and replay-risk fixtures, and the CLI. Exact tarballs are available from [GitHub Releases](https://github.com/abhid1234/replay-room/releases) with CycloneDX SBOMs and signed SLSA and SBOM attestations. npm publication is a separate human-gated release step, so registry availability is verified independently rather than inferred from a successful build.
 
 The endpoint runway turns the durable ledger into a 24-hour reliability view for each destination. It reports event volume, terminal-delivery success rate, retrying and dead-letter counts, and p95 latency from successful live or replay attempts. Queued and in-flight events remain visible without incorrectly lowering the success rate.
 
@@ -203,7 +203,7 @@ GitHub Actions runs the repository verification gate on every branch push and pu
 
 ## Status
 
-Version `0.1.1` is a public, attested GitHub release and the current production-shaped release line. The free Render Blueprint is live and passes the repository's end-to-end deployment gate; the public Hugging Face Space runs the credential-free outage drill from a reproducible, CI-inspected bundle. This remains an evaluation deployment, not a production SLA, and the npm package is not yet published.
+The current production-shaped release line is recorded in the [changelog](CHANGELOG.md) and [GitHub Releases](https://github.com/abhid1234/replay-room/releases). The free Render Blueprint and public Hugging Face Space are exercised by the repository's end-to-end deployment gate; exact publication evidence for npm, releases, deployments, and fixture mirrors is tracked in [the project-standard matrix](docs/PROJECT_STANDARD.md). This remains an evaluation deployment, not a production SLA.
 
 ## License
 
