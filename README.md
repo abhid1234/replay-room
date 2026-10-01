@@ -171,15 +171,18 @@ npm run verify
 
 The verification gate type-checks the API/worker/cron code, runs domain, API, delivery-intent race, queue-loss recovery, diagnosis, heartbeat, free-runtime, live-smoke contract, schema-conformance, registry-safety, and package-content tests, and builds the production API and dashboard bundles.
 
-After a Render Blueprint is live, one command produces machine-readable deployment evidence while tolerating a free-tier cold start:
+After the public surfaces are live, one command produces machine-readable deployment evidence while tolerating a free-tier cold start. It verifies the Render API and console plus the Hugging Face demo's credential boundary and four proof links:
 
 ```bash
-npm run smoke:live -- --api https://YOUR-API.onrender.com --site https://YOUR-CONSOLE.onrender.com
+npm run smoke:live -- \
+  --api https://YOUR-API.onrender.com \
+  --site https://YOUR-CONSOLE.onrender.com \
+  --space https://YOUR-SPACE.static.hf.space
 ```
 
 The current public deployment passed this gate on 2026-09-28 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all nine required OpenAPI paths, the mounted console, and the console's exact CORS policy.
 
-GitHub Actions runs the same gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate manual workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
+GitHub Actions runs the repository verification gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate daily and manually dispatchable live-smoke workflow checks Render and Hugging Face for post-deploy drift. The release workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
 
 ## Interview walkthrough
 

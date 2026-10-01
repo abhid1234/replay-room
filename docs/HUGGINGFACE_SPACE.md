@@ -29,4 +29,11 @@ After publication:
 4. open each proof link: Render console, OpenAPI, GitHub source, and fixture dataset;
 5. check desktop and 375-pixel layouts for overflow and console errors.
 
-The repository's `npm run verify` gate rebuilds and inspects the Space artifact on every pull request.
+The repository's `npm run verify` gate rebuilds and inspects the Space artifact on every pull request. The scheduled public smoke gate also downloads the live Space entrypoint and JavaScript, verifies all demo markers and proof links, and fails if token storage or authenticated operator routes appear:
+
+```bash
+npm run smoke:live -- \
+  --api https://replay-room-api.onrender.com \
+  --site https://replay-room-web.onrender.com \
+  --space https://abhid1234-replay-room.static.hf.space
+```
