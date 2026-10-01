@@ -2,6 +2,18 @@
 
 All notable changes to Replay Room are documented here.
 
+## Unreleased
+
+### Added
+
+- a side-effect-free replay preflight with an eight-condition operator decision trace;
+- a DNS-pinned, dual-stack outbound HTTP client that preserves the original Host and TLS identity without following redirects or reusing a connection across validations.
+
+### Changed
+
+- the newest rehearsal result is authoritative, so an older passing rehearsal cannot bypass a later failure;
+- one delivery deadline now covers cancellable DNS resolution and the HTTP exchange, and outbound response capture is bounded to 4 KiB before it enters the incident ledger.
+
 ## 0.1.1 - 2026-09-27
 
 ### Added
