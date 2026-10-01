@@ -3,7 +3,7 @@
 Replay Room has two public Hugging Face surfaces with deliberately different responsibilities:
 
 - the [fixture dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures) is a versioned synthetic corpus for diagnosis and replay-guard conformance;
-- the Replay Room Space is a static, interactive outage drill that links the product story to the live Render deployment.
+- the [Replay Room Space](https://huggingface.co/spaces/abhid1234/replay-room) is a static, interactive outage drill that links the product story to the live Render deployment.
 
 The Space is not a second backend. Render remains the system of record for the API, Postgres ledger, BullMQ transport, background worker, reconciler, and authenticated operator console. The static Space neither asks for nor stores an admin token.
 
@@ -17,7 +17,7 @@ The command creates `.artifacts/huggingface-space`, injects the public demo buil
 
 ## Publish
 
-Create a public Static HTML Space with the repository id `abhid1234/replay-room`, then upload the contents of `.artifacts/huggingface-space` to the Space root. The generated `README.md` declares `sdk: static` and `app_file: index.html`.
+The public Static HTML Space uses the repository id `abhid1234/replay-room`. Upload the contents of `.artifacts/huggingface-space` to the Space root. The generated `README.md` declares `sdk: static` and `app_file: index.html`.
 
 ## Verify
 
