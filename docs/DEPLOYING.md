@@ -40,10 +40,11 @@ The durable source of truth is Postgres. Every exact queue payload is first stor
 ```bash
 npm run smoke:live -- \
   --api https://YOUR-API.onrender.com \
-  --site https://YOUR-CONSOLE.onrender.com
+  --site https://YOUR-CONSOLE.onrender.com \
+  --space https://YOUR-SPACE.static.hf.space
 ```
 
-The gate allows up to two minutes for a free web service cold start, then verifies the database- and queue-backed health response, the versioned OpenAPI surface, the static console shell, and the exact cross-origin policy needed by that console. It prints `replay-room.live-check/v1` JSON so the result can be retained as launch evidence. The same check is available as the manually dispatched **live deployment smoke** GitHub workflow.
+The gate allows up to two minutes for a free web service cold start, then verifies the database- and queue-backed health response, the versioned OpenAPI surface, the static console shell, the exact cross-origin policy needed by that console, and the Hugging Face demo's credential boundary and proof links. It prints `replay-room.live-check/v1` JSON so the result can be retained as launch evidence. The same check is available as the manually dispatched **live deployment smoke** GitHub workflow.
 
 The Blueprint generates `ADMIN_TOKEN` and `EVIDENCE_SIGNING_SECRET`. Do not copy either value into Git, logs, fixtures, or screenshots.
 
