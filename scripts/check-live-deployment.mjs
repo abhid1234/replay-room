@@ -43,7 +43,7 @@ function positiveInteger(value, flag) {
 }
 
 export function parseArgs(args) {
-  const options = { ...DEFAULTS, apiUrl: '', siteUrl: '', expectedVersion: '' };
+  const options = { ...DEFAULTS, apiUrl: '', siteUrl: '', spaceUrl: '', expectedVersion: '' };
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
     if (flag === '--help') return { help: true };
@@ -51,6 +51,7 @@ export function parseArgs(args) {
     if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value`);
     if (flag === '--api') options.apiUrl = normalizeBaseUrl(value, '--api');
     else if (flag === '--site') options.siteUrl = normalizeBaseUrl(value, '--site');
+    else if (flag === '--space') options.spaceUrl = normalizeBaseUrl(value, '--space');
     else if (flag === '--expected-version') options.expectedVersion = value;
     else if (flag === '--timeout-ms') options.timeoutMs = positiveInteger(value, flag);
     else if (flag === '--interval-ms') options.intervalMs = positiveInteger(value, flag);
@@ -115,6 +116,57 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function moduleScriptUrl(html, baseUrl) {
+  const match = html.match(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["'][^>]*>/i)
+    ?? html.match(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*\btype=["']module["'][^>]*>/i);
+  assert(match, 'Hugging Face Space module script is missing');
+  return new URL(match[1], baseUrl).href;
+}
+
+async function verifySpace(config, dependencies) {
+  if (!config.spaceUrl) return null;
+  const headers = { accept: 'text/html', 'user-agent': 'replay-room-live-check/1' };
+  const response = await fetchWithTimeout(dependencies.fetch, config.spaceUrl, { headers }, config.requestTimeoutMs);
+  assert(response.ok, `Hugging Face Space returned HTTP ${response.status}`);
+  const html = await response.text();
+  assert(html.includes('<title>Replay Room</title>'), 'Hugging Face Space title is missing');
+  assert(/<div\s+id=["']root["']/.test(html), 'Hugging Face Space root element is missing');
+
+  const scriptUrl = moduleScriptUrl(html, response.url || config.spaceUrl);
+  const scriptResponse = await fetchWithTimeout(
+    dependencies.fetch,
+    scriptUrl,
+    { headers: { accept: 'text/javascript', 'user-agent': 'replay-room-live-check/1' } },
+    config.requestTimeoutMs,
+  );
+  assert(scriptResponse.ok, `Hugging Face Space JavaScript returned HTTP ${scriptResponse.status}`);
+  const script = await scriptResponse.text();
+
+  for (const marker of [
+    'Public simulation',
+    'No admin token is collected',
+    'The demo is static. The evidence chain is not.',
+  ]) assert(script.includes(marker), `Hugging Face Space is missing demo marker: ${marker}`);
+
+  for (const forbidden of [
+    'replay-room-token',
+    'Render-generated admin token',
+    '/api/stats',
+    '/api/events',
+    'Authorization: Bearer',
+  ]) assert(!script.includes(forbidden), `Hugging Face Space exposes operator-console capability: ${forbidden}`);
+
+  const proofLinks = [
+    'https://replay-room-web.onrender.com',
+    'https://replay-room-api.onrender.com/openapi.json',
+    'https://github.com/abhid1234/replay-room',
+    'https://huggingface.co/datasets/abhid1234/replay-room-fixtures',
+  ];
+  const missingProof = proofLinks.filter((link) => !script.includes(link));
+  assert(missingProof.length === 0, `Hugging Face Space is missing proof links: ${missingProof.join(', ')}`);
+  return { demoMode: true, credentialSurface: 'none', proofLinks: proofLinks.length, scriptUrl };
+}
+
 export async function runLiveCheck(config, overrides = {}) {
   const dependencies = {
     fetch: overrides.fetch ?? globalThis.fetch,
@@ -149,6 +201,8 @@ export async function runLiveCheck(config, overrides = {}) {
   assert(siteHtml.includes('<title>Replay Room</title>'), 'operator console title is missing');
   assert(/<div\s+id=["']root["']/.test(siteHtml), 'operator console root element is missing');
 
+  const space = await verifySpace(config, dependencies);
+
   const siteOrigin = new URL(config.siteUrl).origin;
   const corsResponse = await fetchWithTimeout(
     dependencies.fetch,
@@ -177,7 +231,7 @@ export async function runLiveCheck(config, overrides = {}) {
     status: 'passed',
     checkedAt: new Date(dependencies.now()).toISOString(),
     durationMs: dependencies.now() - startedAt,
-    targets: { api: config.apiUrl, site: config.siteUrl },
+    targets: { api: config.apiUrl, site: config.siteUrl, ...(config.spaceUrl ? { space: config.spaceUrl } : {}) },
     coldStart: { attempts: health.attempts.length, warmAfterMs: health.warmAfterMs },
     checks: {
       health: {
@@ -187,13 +241,14 @@ export async function runLiveCheck(config, overrides = {}) {
       },
       openApi: { version: openApi.info.version, requiredPaths: REQUIRED_OPENAPI_PATHS.length },
       console: { title: 'Replay Room', rootMounted: true },
+      ...(space ? { space } : {}),
       cors: { origin: allowOrigin, allowsGet: true, allowsAuthorization: true },
     },
   };
 }
 
 function usage() {
-  return `Usage: npm run smoke:live -- --api https://api.example.com --site https://app.example.com [options]\n\nOptions:\n  --expected-version <version>  Expected OpenAPI version (defaults to package version)\n  --timeout-ms <milliseconds>   Total cold-start allowance (default: 120000)\n  --interval-ms <milliseconds>  Delay between health attempts (default: 3000)\n  --request-timeout-ms <ms>     Timeout for each HTTP request (default: 15000)`;
+  return `Usage: npm run smoke:live -- --api https://api.example.com --site https://app.example.com [options]\n\nOptions:\n  --space <origin>              Public Hugging Face Static Space origin\n  --expected-version <version>  Expected OpenAPI version (defaults to package version)\n  --timeout-ms <milliseconds>   Total cold-start allowance (default: 120000)\n  --interval-ms <milliseconds>  Delay between health attempts (default: 3000)\n  --request-timeout-ms <ms>     Timeout for each HTTP request (default: 15000)`;
 }
 
 export async function main(args = process.argv.slice(2)) {
