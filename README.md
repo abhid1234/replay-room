@@ -3,7 +3,7 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
-[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json)
+[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
 
 **Rehearse a failed webhook before you replay it.**
 
@@ -36,6 +36,10 @@ The public dashboard opens with an interactive outage drill that follows a payme
 For live events, the API computes a deterministic diagnosis from the current state and attempt transcript. It distinguishes receiver outages, rate limiting, contract rejection, network failure, active recovery, and healthy delivery, then gives the operator evidence and a concrete next action. The rules are explainable and tested; no external model or hidden prompt decides whether a replay is safe.
 
 The authenticated console also reads a live runtime snapshot instead of presenting a decorative architecture diagram. Postgres and Key Value latency come from direct dependency checks, BullMQ reports waiting/active/delayed/failed job counts, the durable outbox exposes pending/dispatched/processing/stale intent pressure, and the background worker and cron reconciler publish expiring heartbeats. On Render, the panel includes the service, instance, and Git commit injected into the running API.
+
+The operator token is session-scoped by default and is removed by **Disconnect**. Persisting it across browser restarts requires an explicit opt-in; tokens saved by older releases are automatically downgraded to session storage on first load.
+
+Every configured endpoint appears in the **Ingest workbench** with a copy-ready, idempotent cURL recipe. Unsigned endpoints produce an executable request; signed profiles name the exact provider header that must be computed without ever returning the signing secret to the browser.
 
 Every incident can be downloaded as a signed evidence bundle. The JSON includes the original event identity and payload digest, diagnosis, full attempt transcript, rehearsal records, and audit history. A canonical HMAC-SHA256 seal detects any later modification. Endpoint signing secrets are never returned by the admin API or included in exports; the server reports only whether a secret is configured.
 
@@ -179,11 +183,15 @@ The verification gate type-checks the API/worker/cron code, runs domain, API, de
 After the public surfaces are live, one command produces machine-readable deployment evidence while tolerating a free-tier cold start. It verifies the Render API and console plus the Hugging Face demo's credential boundary and four proof links:
 
 ```bash
-npm run smoke:live -- \
+npx @avee1234/replay-room doctor \
   --api https://YOUR-API.onrender.com \
   --site https://YOUR-CONSOLE.onrender.com \
   --space https://YOUR-SPACE.static.hf.space
 ```
+
+Repository contributors can run the identical check with `npm run smoke:live -- ...`. The published CLI emits a `replay-room.live-check/v1` JSON result that can be attached to a launch review, deployment record, or incident handoff.
+
+Each deployment also exposes `/.well-known/replay-room`: a cacheable launch manifest that binds the API version to its Render commit, console origin, public proof surfaces, capabilities, and safety posture without exposing operator credentials or incident data. `doctor` verifies this manifest rather than trusting a green deployment badge.
 
 The current public deployment passed this gate on 2026-09-30 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all ten required OpenAPI paths, the mounted console, the console's exact CORS policy, and the credential-free Hugging Face demo boundary.
 

@@ -36,13 +36,33 @@ export async function inspectEvidenceFile(path: string): Promise<EvidenceSummary
   };
 }
 
-async function main(): Promise<void> {
-  const [commandOrPath, commandPath] = process.argv.slice(2);
+const usage = "Usage: replay-room inspect <bundle.json> | EVIDENCE_SIGNING_SECRET=<secret> replay-room verify <bundle.json> | replay-room doctor --api <origin> --site <origin> [--space <origin>]";
+
+interface LiveCheckModule {
+  main(args: string[]): Promise<void>;
+}
+
+async function runDoctor(args: string[]): Promise<void> {
+  const moduleUrl = new URL("../../scripts/check-live-deployment.mjs", import.meta.url);
+  const liveCheck = await import(moduleUrl.href) as LiveCheckModule;
+  await liveCheck.main(args);
+}
+
+export async function main(args = process.argv.slice(2)): Promise<void> {
+  const [commandOrPath, commandPath] = args;
+  if (commandOrPath === "doctor") {
+    await runDoctor(args.slice(1));
+    return;
+  }
+  if (commandOrPath === "--help" || commandOrPath === "help") {
+    console.log(usage);
+    return;
+  }
   const command = commandOrPath === "inspect" ? "inspect" : "verify";
   const path = commandOrPath === "verify" || commandOrPath === "inspect" ? commandPath : commandOrPath;
   const secret = process.env.EVIDENCE_SIGNING_SECRET;
   if (!path || (command === "verify" && !secret)) {
-    console.error("Usage: replay-room inspect <bundle.json> | EVIDENCE_SIGNING_SECRET=<secret> replay-room verify <bundle.json>");
+    console.error(usage);
     process.exitCode = 2;
     return;
   }

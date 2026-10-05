@@ -38,6 +38,7 @@ try {
     "dist/index.js",
     "dist/index.d.ts",
     "dist/cli/verify-evidence.js",
+    "scripts/check-live-deployment.mjs",
     "schema/replay-room-evidence-v1.schema.json",
     "fixtures/manifest.json",
     "fixtures/incidents/payment-receiver-outage.json",
@@ -83,6 +84,9 @@ try {
     auditEntries: 1,
     contentSha256: bundle.integrity.contentSha256,
   });
+  const doctorHelp = execFileSync(process.execPath, [join(installRoot, "dist/cli/verify-evidence.js"), "doctor", "--help"], { encoding: "utf8" });
+  assert.match(doctorHelp, /replay-room doctor --api/);
+  assert.match(doctorHelp, /--expected-version/);
 
   console.log(JSON.stringify({ package: "passed", name: pack.name, version: pack.version, versionSurfaces: Object.keys(versionSurfaces).length, files: pack.entryCount, size: pack.size, installSmoke: true }));
 } finally {
