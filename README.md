@@ -3,7 +3,7 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
-[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json)
+[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
 
 **Rehearse a failed webhook before you replay it.**
 
@@ -190,6 +190,8 @@ npx @avee1234/replay-room doctor \
 ```
 
 Repository contributors can run the identical check with `npm run smoke:live -- ...`. The published CLI emits a `replay-room.live-check/v1` JSON result that can be attached to a launch review, deployment record, or incident handoff.
+
+Each deployment also exposes `/.well-known/replay-room`: a cacheable launch manifest that binds the API version to its Render commit, console origin, public proof surfaces, capabilities, and safety posture without exposing operator credentials or incident data. `doctor` verifies this manifest rather than trusting a green deployment badge.
 
 The current public deployment passed this gate on 2026-09-30 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all ten required OpenAPI paths, the mounted console, the console's exact CORS policy, and the credential-free Hugging Face demo boundary.
 

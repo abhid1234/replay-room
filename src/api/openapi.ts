@@ -37,6 +37,14 @@ export const openApiDocument = {
         responses: { "200": { description: "OpenAPI 3.1 document" } },
       },
     },
+    "/.well-known/replay-room": {
+      get: {
+        tags: ["public"],
+        summary: "Read versioned launch proof and public surface metadata",
+        operationId: "getLaunchProof",
+        responses: { "200": response("Machine-readable launch proof", "LaunchProof") },
+      },
+    },
     "/ingest/{ingestKey}": {
       post: {
         tags: ["public"],
@@ -101,6 +109,15 @@ export const openApiDocument = {
       Health: object(["status", "service", "timestamp", "dependencies"], {
         status: { const: "ok" }, service: { type: "string" }, timestamp: dateTime,
         dependencies: object(["databaseLatencyMs", "queueLatencyMs"], { databaseLatencyMs: nonnegativeInteger, queueLatencyMs: nonnegativeInteger }),
+      }),
+      LaunchProof: object(["schemaVersion", "service", "version", "deployment", "surfaces", "capabilities", "safety"], {
+        schemaVersion: { const: "replay-room.launch-proof/v1" },
+        service: { const: "replay-room-api" },
+        version: { type: "string" },
+        deployment: { type: "object" },
+        surfaces: { type: "object" },
+        capabilities: { type: "array", items: { type: "string" } },
+        safety: { type: "object" },
       }),
       IngestReceipt: object(["accepted", "duplicate", "eventId", "status"], {
         accepted: { const: true }, duplicate: { type: "boolean" }, eventId: uuid, status: eventStatus,

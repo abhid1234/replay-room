@@ -121,6 +121,37 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     return openApiDocument;
   });
 
+  app.get("/.well-known/replay-room", async (_request, reply) => {
+    const consoleOrigin = config.WEB_ORIGIN.split(",").map((origin) => origin.trim()).find(Boolean) ?? "http://localhost:5173";
+    reply.header("cache-control", "public, max-age=300");
+    return {
+      schemaVersion: "replay-room.launch-proof/v1",
+      service: "replay-room-api",
+      version: openApiDocument.info.version,
+      deployment: {
+        platform: process.env.RENDER ? "render" : "local",
+        service: process.env.RENDER_SERVICE_NAME ?? "replay-room-api",
+        commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
+        topology: config.EMBEDDED_WORKER ? "embedded-free" : "split-services",
+      },
+      surfaces: {
+        console: consoleOrigin,
+        health: "/health",
+        openApi: "/openapi.json",
+        source: "https://github.com/abhid1234/replay-room",
+        fixtures: "https://huggingface.co/datasets/abhid1234/replay-room-fixtures",
+        demo: "https://huggingface.co/spaces/abhid1234/replay-room",
+      },
+      capabilities: ["durable-ingest", "bounded-retry", "incident-diagnosis", "rehearsal", "guarded-replay", "signed-evidence"],
+      safety: {
+        operatorAuth: "bearer",
+        replayPolicy: "rehearsal-and-eight-condition-preflight",
+        evidenceIntegrity: "HMAC-SHA256",
+        privateNetworkEgress: config.ALLOW_PRIVATE_TARGETS ? "enabled" : "blocked",
+      },
+    };
+  });
+
   app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
   app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
     const databaseStartedAt = Date.now();

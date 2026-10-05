@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const REQUIRED_OPENAPI_PATHS = [
   "/health",
   "/openapi.json",
+  "/.well-known/replay-room",
   "/ingest/{ingestKey}",
   "/api/stats",
   "/api/system",
@@ -191,6 +192,21 @@ export async function runLiveCheck(config, overrides = {}) {
   const missingPaths = REQUIRED_OPENAPI_PATHS.filter((path) => !openApi.paths?.[path]);
   assert(missingPaths.length === 0, `OpenAPI document is missing required paths: ${missingPaths.join(', ')}`);
 
+  const manifestResponse = await fetchWithTimeout(
+    dependencies.fetch,
+    `${config.apiUrl}/.well-known/replay-room`,
+    { headers: { accept: 'application/json', 'user-agent': 'replay-room-live-check/1' } },
+    config.requestTimeoutMs,
+  );
+  assert(manifestResponse.ok, `launch proof returned HTTP ${manifestResponse.status}`);
+  const manifest = await jsonResponse(manifestResponse, '/.well-known/replay-room');
+  assert(manifest.schemaVersion === 'replay-room.launch-proof/v1', 'launch proof schema is unsupported');
+  assert(manifest.service === 'replay-room-api', 'launch proof service is incorrect');
+  assert(manifest.version === config.expectedVersion, `launch proof version ${manifest.version ?? 'missing'} does not match ${config.expectedVersion}`);
+  assert(manifest.surfaces?.console === config.siteUrl, `launch proof console is ${manifest.surfaces?.console ?? 'missing'}, expected ${config.siteUrl}`);
+  assert(manifest.surfaces?.openApi === '/openapi.json', 'launch proof OpenAPI path is incorrect');
+  assert(Array.isArray(manifest.capabilities) && manifest.capabilities.includes('guarded-replay'), 'launch proof is missing guarded replay capability');
+
   const siteResponse = await fetchWithTimeout(
     dependencies.fetch,
     config.siteUrl,
@@ -241,6 +257,7 @@ export async function runLiveCheck(config, overrides = {}) {
         queueLatencyMs: health.body.dependencies?.queueLatencyMs,
       },
       openApi: { version: openApi.info.version, requiredPaths: REQUIRED_OPENAPI_PATHS.length },
+      launchProof: { schemaVersion: manifest.schemaVersion, version: manifest.version, platform: manifest.deployment?.platform, commit: manifest.deployment?.commit },
       console: { title: 'Replay Room', rootMounted: true },
       ...(space ? { space } : {}),
       cors: { origin: allowOrigin, allowsGet: true, allowsAuthorization: true },

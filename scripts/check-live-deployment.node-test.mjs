@@ -5,6 +5,7 @@ import { normalizeBaseUrl, parseArgs, resolveExpectedVersion, runLiveCheck } fro
 const REQUIRED_PATHS = [
   '/health',
   '/openapi.json',
+  '/.well-known/replay-room',
   '/ingest/{ingestKey}',
   '/api/stats',
   '/api/system',
@@ -26,7 +27,7 @@ const SPACE_PROOF_LINKS = [
   'https://huggingface.co/datasets/abhid1234/replay-room-fixtures',
 ];
 
-function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com', spaceCapabilityLeak = '', missingProof = '', openApiVersion = '0.1.2' } = {}) {
+function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'https://console.example.com', spaceCapabilityLeak = '', missingProof = '', openApiVersion = '0.1.2', manifestVersion = openApiVersion, manifestConsole = 'https://console.example.com' } = {}) {
   let healthAttempts = 0;
   return async (input, init = {}) => {
     const url = String(input);
@@ -39,6 +40,16 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
     if (url === 'https://api.example.com/openapi.json') {
       const paths = Object.fromEntries(REQUIRED_PATHS.filter((path) => path !== missingPath).map((path) => [path, {}]));
       return json({ openapi: '3.1.0', info: { title: 'Replay Room API', version: openApiVersion }, paths });
+    }
+    if (url === 'https://api.example.com/.well-known/replay-room') {
+      return json({
+        schemaVersion: 'replay-room.launch-proof/v1',
+        service: 'replay-room-api',
+        version: manifestVersion,
+        deployment: { platform: 'render', commit: 'abc1234' },
+        surfaces: { console: manifestConsole, openApi: '/openapi.json' },
+        capabilities: ['durable-ingest', 'guarded-replay'],
+      });
     }
     if (url === 'https://console.example.com' && method === 'GET') {
       return new Response('<!doctype html><title>Replay Room</title><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } });
@@ -117,7 +128,8 @@ test('waits through a cold start and verifies health, contract, console, and COR
   assert.equal(result.status, 'passed');
   assert.deepEqual(result.coldStart, { attempts: 3, warmAfterMs: 2_000 });
   assert.equal(result.checks.health.databaseLatencyMs, 4);
-  assert.equal(result.checks.openApi.requiredPaths, 10);
+  assert.equal(result.checks.openApi.requiredPaths, 11);
+  assert.deepEqual(result.checks.launchProof, { schemaVersion: 'replay-room.launch-proof/v1', version: '0.1.2', platform: 'render', commit: 'abc1234' });
   assert.deepEqual(result.checks.space, {
     demoMode: true,
     credentialSurface: 'none',
@@ -131,6 +143,17 @@ test('fails closed when the deployed OpenAPI surface is incomplete', async () =>
   await assert.rejects(
     runLiveCheck(config, { fetch: fixtureFetch({ missingPath: '/api/events/{eventId}/replay' }) }),
     /missing required paths.*replay/,
+  );
+});
+
+test('fails closed when launch proof drifts from the deployed version or console', async () => {
+  await assert.rejects(
+    runLiveCheck(config, { fetch: fixtureFetch({ manifestVersion: '0.1.1' }) }),
+    /launch proof version 0\.1\.1 does not match 0\.1\.2/,
+  );
+  await assert.rejects(
+    runLiveCheck(config, { fetch: fixtureFetch({ manifestConsole: 'https://stale.example.com' }) }),
+    /launch proof console.*expected/,
   );
 });
 

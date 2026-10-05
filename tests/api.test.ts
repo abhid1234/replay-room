@@ -84,9 +84,33 @@ describe("webhook API", () => {
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
       info: { title: "Replay Room API", version: "0.1.2" },
-      paths: { "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay": {} },
+      paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });
+  });
+
+  it("publishes cacheable launch proof without leaking operator state", async () => {
+    const app = await buildApp({ config, store: new FakeStore(), queue: new FakeQueue() });
+    apps.push(app);
+
+    const response = await app.inject({ method: "GET", url: "/.well-known/replay-room" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("public, max-age=300");
+    expect(response.json()).toMatchObject({
+      schemaVersion: "replay-room.launch-proof/v1",
+      service: "replay-room-api",
+      version: "0.1.2",
+      deployment: { platform: "local", topology: "split-services" },
+      surfaces: {
+        console: config.WEB_ORIGIN,
+        health: "/health",
+        openApi: "/openapi.json",
+        source: "https://github.com/abhid1234/replay-room",
+      },
+      safety: { operatorAuth: "bearer", privateNetworkEgress: "enabled" },
+    });
+    expect(response.json()).not.toHaveProperty("adminToken");
+    expect(response.json()).not.toHaveProperty("evidenceSigningSecret");
   });
 
   it("allows the configured operator console to preflight authenticated reads", async () => {
