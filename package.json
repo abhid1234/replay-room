@@ -38,6 +38,7 @@
     "dist/",
     "docs/",
     "fixtures/",
+    "scripts/check-live-deployment.mjs",
     "schema/",
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",

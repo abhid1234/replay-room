@@ -183,11 +183,13 @@ The verification gate type-checks the API/worker/cron code, runs domain, API, de
 After the public surfaces are live, one command produces machine-readable deployment evidence while tolerating a free-tier cold start. It verifies the Render API and console plus the Hugging Face demo's credential boundary and four proof links:
 
 ```bash
-npm run smoke:live -- \
+npx @avee1234/replay-room doctor \
   --api https://YOUR-API.onrender.com \
   --site https://YOUR-CONSOLE.onrender.com \
   --space https://YOUR-SPACE.static.hf.space
 ```
+
+Repository contributors can run the identical check with `npm run smoke:live -- ...`. The published CLI emits a `replay-room.live-check/v1` JSON result that can be attached to a launch review, deployment record, or incident handoff.
 
 The current public deployment passed this gate on 2026-09-30 against `https://replay-room-api.onrender.com` and `https://replay-room-web.onrender.com`. It verified live Postgres and Key Value health, all ten required OpenAPI paths, the mounted console, the console's exact CORS policy, and the credential-free Hugging Face demo boundary.
 

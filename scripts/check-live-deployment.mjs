@@ -249,7 +249,7 @@ export async function runLiveCheck(config, overrides = {}) {
 }
 
 function usage() {
-  return `Usage: npm run smoke:live -- --api https://api.example.com --site https://app.example.com [options]\n\nOptions:\n  --space <origin>              Public Hugging Face Static Space origin\n  --expected-version <version>  Expected OpenAPI version (defaults to package version)\n  --timeout-ms <milliseconds>   Total cold-start allowance (default: 120000)\n  --interval-ms <milliseconds>  Delay between health attempts (default: 3000)\n  --request-timeout-ms <ms>     Timeout for each HTTP request (default: 15000)`;
+  return `Usage: replay-room doctor --api https://api.example.com --site https://app.example.com [options]\n\nOptions:\n  --space <origin>              Public Hugging Face Static Space origin\n  --expected-version <version>  Expected OpenAPI version (defaults to package version)\n  --timeout-ms <milliseconds>   Total cold-start allowance (default: 120000)\n  --interval-ms <milliseconds>  Delay between health attempts (default: 3000)\n  --request-timeout-ms <ms>     Timeout for each HTTP request (default: 15000)`;
 }
 
 export async function resolveExpectedVersion(options, loadPackage = async () => JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))) {
