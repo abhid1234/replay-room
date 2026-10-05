@@ -54,6 +54,10 @@ input, textarea, select { width: 100%; border: 1px solid rgba(137, 160, 165, .4)
 input:focus, textarea:focus, select:focus { border-color: var(--mint); }
 .connection-panel button, .endpoint-form button, .action-form button { width: 100%; margin-top: 12px; border: 0; background: var(--mint); color: var(--night); padding: 13px; font-weight: 600; }
 .connection-panel small { display: block; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+.remember-token { display: flex; align-items: center; gap: 9px; margin: 12px 0 0; color: var(--paper); }
+.remember-token input { width: auto; margin: 0; accent-color: var(--mint); }
+.connection-actions { display: grid; grid-template-columns: 1fr auto; gap: 9px; }
+.connection-panel .secondary { width: auto; border: 1px solid var(--line); background: transparent; color: var(--paper); }
 .demo-panel p { margin: 0 0 19px; color: #b9c8c8; line-height: 1.55; }
 .primary-link { display: block; border: 0; background: var(--mint); color: var(--night); padding: 13px; text-align: center; text-decoration: none; font-weight: 600; }
 .primary-link:hover { background: var(--paper); }

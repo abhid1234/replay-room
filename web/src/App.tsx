@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IncidentDrill } from "./IncidentDrill";
 import { startAuthorizedPolling, type PollResult } from "./polling";
+import { clearOperatorCredential, loadOperatorCredential, saveOperatorCredential } from "./token-storage";
 
 type EventStatus = "queued" | "delivering" | "retrying" | "delivered" | "dead_letter";
 type Event = {
@@ -120,7 +121,9 @@ function DemoApp() {
 }
 
 function ConsoleApp() {
-  const [token, setToken] = useState(() => localStorage.getItem("replay-room-token") || "");
+  const [initialCredential] = useState(() => loadOperatorCredential(localStorage, sessionStorage));
+  const [token, setToken] = useState(initialCredential.token);
+  const [rememberToken, setRememberToken] = useState(initialCredential.remember);
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
@@ -149,14 +152,14 @@ function ConsoleApp() {
         request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"), request<EndpointReliability[]>("/api/endpoints/reliability?windowHours=24"), request<SystemSnapshot>("/api/system"),
       ]);
       setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setReliability(nextReliability); setSystem(nextSystem);
-      localStorage.setItem("replay-room-token", token);
+      saveOperatorCredential(token, rememberToken, localStorage, sessionStorage);
       setMessage(`Connected to ${API_BASE}`);
       return "ok";
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load Replay Room");
       return error instanceof ApiRequestError && error.status === 401 ? "unauthorized" : "retryable";
     } finally { if (!silent) setBusy(false); }
-  }, [request, token]);
+  }, [rememberToken, request, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -166,6 +169,19 @@ function ConsoleApp() {
   const openEvent = async (id: string) => {
     try { setSelected(await request<Detail>(`/api/events/${id}`)); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not open event"); }
+  };
+
+  const disconnect = () => {
+    clearOperatorCredential(localStorage, sessionStorage);
+    setToken("");
+    setRememberToken(false);
+    setEvents([]);
+    setStats(null);
+    setEndpoints([]);
+    setReliability([]);
+    setSystem(null);
+    setSelected(null);
+    setMessage("Disconnected. The operator token was removed from this browser.");
   };
 
   const createEndpoint = async (form: HTMLFormElement) => {
@@ -246,7 +262,12 @@ function ConsoleApp() {
           <div className="connection-title"><span>Live stack</span><i className={system ? "online" : ""} /></div>
           <label htmlFor="admin-token">Admin token</label>
           <input id="admin-token" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Render-generated secret" />
-          <button onClick={() => void refresh()} disabled={busy}>{busy ? "Connecting..." : "Open console"}</button>
+          <label className="remember-token"><input type="checkbox" checked={rememberToken} onChange={(event) => setRememberToken(event.target.checked)} /><span>Remember on this browser</span></label>
+          <div className="connection-actions">
+            <button onClick={() => void refresh()} disabled={busy || !token}>{busy ? "Connecting..." : "Open console"}</button>
+            {token && <button className="secondary" onClick={disconnect}>Disconnect</button>}
+          </div>
+          <small>Session-only by default. Browser persistence is opt-in.</small>
           <small>{message}</small>
         </div>
       </section>
