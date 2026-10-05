@@ -129,7 +129,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       service: "replay-room-api",
       version: openApiDocument.info.version,
       deployment: {
-        platform: process.env.RENDER ? "render" : "local",
+        platform: process.env.RENDER_SERVICE_NAME ? "render" : "local",
         service: process.env.RENDER_SERVICE_NAME ?? "replay-room-api",
         commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
         topology: config.EMBEDDED_WORKER ? "embedded-free" : "split-services",
