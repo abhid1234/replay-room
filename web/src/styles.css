@@ -157,6 +157,16 @@ input:focus, textarea:focus, select:focus { border-color: var(--mint); }
 .runway-rate > i { display: block; height: 4px; margin-top: 8px; background: #25434c; overflow: hidden; }
 .runway-rate > i > b { display: block; height: 100%; background: var(--mint); }
 .runway-row.at_risk .runway-rate > i > b { background: var(--amber); }.runway-row.breached .runway-rate > i > b { background: var(--red); }
+.ingest-workbench { margin-bottom: 22px; border: 1px solid var(--line); background: rgba(8, 31, 40, .82); }
+.ingest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.ingest-card { min-width: 0; padding: 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ingest-card > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ingest-card span { color: var(--sky); font: 500 9px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.ingest-card strong { font-size: 14px; font-weight: 500; }
+.ingest-card code { display: block; overflow: hidden; margin: 14px 0 8px; color: var(--mint); font: 500 10px "IBM Plex Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.ingest-card small { display: block; color: var(--muted); font-size: 10px; }
+.ingest-card button { width: 100%; margin-top: 15px; border: 1px solid var(--sky); background: transparent; color: var(--sky); padding: 10px; font: 500 10px "IBM Plex Mono", monospace; }
+.ingest-card button:hover { background: rgba(103, 184, 215, .08); }
 .console-grid { display: grid; grid-template-columns: .88fr 1.25fr; gap: 22px; }
 .panel { border: 1px solid var(--line); background: rgba(8, 31, 40, .88); }
 .panel-title { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--line); font: 500 12px "IBM Plex Mono", monospace; }

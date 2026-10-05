@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IncidentDrill } from "./IncidentDrill";
+import { buildIngestRecipe } from "./ingest-recipe";
 import { startAuthorizedPolling, type PollResult } from "./polling";
 import { clearOperatorCredential, loadOperatorCredential, saveOperatorCredential } from "./token-storage";
 
@@ -14,7 +15,7 @@ type Event = {
   receivedAt: string;
 };
 type Stats = { total: number; queued: number; delivered: number; retrying: number; deadLetter: number; deliveryRate: number };
-type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; signatureProfile: "none" | "generic" | "github" | "stripe"; maxAttempts: number };
+type Endpoint = { id: string; name: string; ingestKey: string; destinationUrl: string; signatureProfile: "none" | "generic" | "github" | "stripe"; maxAttempts: number; signingSecretConfigured?: boolean };
 type EndpointReliability = {
   endpointId: string;
   name: string;
@@ -201,6 +202,18 @@ function ConsoleApp() {
     form.reset(); await refresh();
   };
 
+  const copyIngestRecipe = async (endpoint: Endpoint) => {
+    const recipe = buildIngestRecipe(API_BASE, endpoint.ingestKey, endpoint.signatureProfile);
+    try {
+      await navigator.clipboard.writeText(recipe.command);
+      setMessage(recipe.signatureHeader
+        ? `cURL copied for ${endpoint.name}. Replace the ${recipe.signatureHeader.split(":")[0]} placeholder with a valid signature before sending.`
+        : `Ready-to-run cURL copied for ${endpoint.name}.`);
+    } catch {
+      setMessage("Clipboard access was denied. Use a secure browser context and try again.");
+    }
+  };
+
   const rehearse = async (event: Detail, destinationUrl: string) => {
     await request(`/api/events/${event.id}/rehearse`, {
       method: "POST", headers: { "x-operator": "dashboard" }, body: JSON.stringify({ destinationUrl, notes: "Dashboard rehearsal before operator replay" }),
@@ -283,6 +296,8 @@ function ConsoleApp() {
 
       <ReliabilityBoard endpoints={reliability} />
 
+      <IngestWorkbench endpoints={endpoints} onCopy={copyIngestRecipe} />
+
       <section className="console-grid">
         <article className="panel event-panel">
           <div className="panel-title"><span>Event stream</span><button className="quiet" onClick={() => void refresh()}>Refresh</button></div>
@@ -322,6 +337,23 @@ function ConsoleApp() {
       <footer>{endpoints.length} endpoint{endpoints.length === 1 ? "" : "s"} configured · no replay without evidence</footer>
     </main>
   );
+}
+
+function IngestWorkbench({ endpoints, onCopy }: { endpoints: Endpoint[]; onCopy: (endpoint: Endpoint) => Promise<void> }) {
+  return <section className="ingest-workbench" aria-label="Webhook ingest recipes">
+    <div className="runway-heading"><span>Ingest workbench</span><small>Copy a capability URL recipe · every example carries an idempotency key</small></div>
+    {endpoints.length === 0 ? <div className="runway-empty">Create an endpoint to get a copy-ready webhook recipe.</div> : <div className="ingest-grid">
+      {endpoints.map((endpoint) => {
+        const ingestUrl = `${API_BASE}/ingest/${endpoint.ingestKey}`;
+        return <article className="ingest-card" key={endpoint.id}>
+          <div><span>{endpoint.signatureProfile === "none" ? "Unsigned" : `${endpoint.signatureProfile} signed`}</span><strong>{endpoint.name}</strong></div>
+          <code title={ingestUrl}>{ingestUrl}</code>
+          <small>Forwards to {destinationHost(endpoint.destinationUrl)} · {endpoint.maxAttempts} attempt budget</small>
+          <button onClick={() => void onCopy(endpoint)}>{endpoint.signatureProfile === "none" ? "Copy ready cURL" : "Copy signed cURL skeleton"}</button>
+        </article>;
+      })}
+    </div>}
+  </section>;
 }
 
 function SpaceProof() {
