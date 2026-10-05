@@ -43,3 +43,5 @@ The public dataset is live at <https://huggingface.co/datasets/abhid1234/replay-
 On 2026-09-29, a fresh download reproduced all four prepared files byte-for-byte. An unauthenticated download of `dataset-manifest.json` produced SHA-256 `c37ad0cab7e5dc2d34c6a526cf8fa20acea613640817e756a33108b062a29fac`, matching the checked-in manifest.
 
 Dataset version `0.1.2` was published on 2026-10-01 at commit `dfd09d101e0c4c281d156c395b9b001f9d11fdfe`. A fresh anonymous readback of `dataset-manifest.json` matched the checked-in file byte-for-byte at SHA-256 `fabe8f833b133c9580d822bf8340cceb3b29dadd054acf5b2c8d30e442096e80`.
+
+Dataset version `0.2.0` was published on 2026-10-05 at commit `fc5a295145ff4f74770017dc86b85bb3e3db636a`. Fresh anonymous downloads of the manifest and both JSONL configurations matched the checked-in files byte-for-byte. The manifest SHA-256 is `56a8561b77807921f3f51798db0f4315356e8f6a00d4eec525a48b14091c2c92`; the incident and replay-guard file digests remain the values recorded inside that manifest.
