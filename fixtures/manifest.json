@@ -1,6 +1,6 @@
 {
   "name": "Replay Room incident fixtures",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "license": "MIT",
   "synthetic": true,
   "description": "Deterministic webhook incident scenarios for conformance and demonstrations. No production traffic or provider claims.",
