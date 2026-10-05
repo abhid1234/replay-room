@@ -4,6 +4,21 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-04
+
+### Added
+
+- a packaged `replay-room doctor` command that verifies the Render API, operator console, CORS contract, and credential-free Hugging Face demo as one launch surface;
+- a public `replay-room.launch-proof/v1` manifest that binds a deployment's version, Render commit, console origin, capabilities, and safety posture;
+- an operator ingest workbench with copy-ready idempotent cURL recipes and explicit provider-signature placeholders;
+- regression coverage for release workflow security, credential storage, ingest recipes, launch proof, and deployment drift.
+
+### Changed
+
+- operator tokens are session-scoped by default, browser persistence requires explicit opt-in, and **Disconnect** clears credentials plus loaded incident state;
+- legacy always-persistent browser tokens are automatically downgraded to the current session;
+- release provenance and CycloneDX SBOMs use the unified `actions/attest@v4` path, with artifact downloads on `actions/download-artifact@v8`.
+
 ## 0.1.2 - 2026-10-01
 
 ### Added

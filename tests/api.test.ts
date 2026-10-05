@@ -83,7 +83,7 @@ describe("webhook API", () => {
     expect(response.headers["cache-control"]).toBe("public, max-age=300");
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
-      info: { title: "Replay Room API", version: "0.1.2" },
+      info: { title: "Replay Room API", version: "0.2.0" },
       paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });
@@ -99,7 +99,7 @@ describe("webhook API", () => {
     expect(response.json()).toMatchObject({
       schemaVersion: "replay-room.launch-proof/v1",
       service: "replay-room-api",
-      version: "0.1.2",
+      version: "0.2.0",
       deployment: { platform: "local", topology: "split-services" },
       surfaces: {
         console: config.WEB_ORIGIN,
