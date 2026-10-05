@@ -54,12 +54,12 @@ Both public ingest and operator routes use Redis-backed distributed limits. `ING
 
 ## Verified public deployment
 
-The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live from commit `43cca36`:
+The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live. Its current public services run exact commit `af3592bd8aa965c336834e0682ef4993dd981c0e`:
 
-- console: <https://replay-room-web.onrender.com>
-- API: <https://replay-room-api.onrender.com>
+- console: <https://replay-room-web.onrender.com>, deploy `dep-dav9dl7avr4c738tiajg`;
+- API: <https://replay-room-api.onrender.com>, deploy `dep-dav9dld9fdbs73d9ed30`.
 
-On 2026-09-30, `npm run smoke:live` passed across the Render API, Render console, and Hugging Face demo. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.1.1` with all ten required routes, a mounted console, the exact cross-origin policy required by that console, and a credential-free Space bundle with its four proof links.
+On 2026-10-01, `npm run smoke:live` passed across the Render API, Render console, and Hugging Face demo. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.1.2` with all ten required routes, a mounted console, the exact cross-origin policy required by that console, and a credential-free Space bundle with its four proof links.
 
 ## Production upgrade
 
