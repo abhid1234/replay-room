@@ -4,7 +4,7 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
-## 0.2.0 - 2026-10-04
+## 0.2.0 - 2026-10-11
 
 ### Added
 
@@ -17,7 +17,13 @@ All notable changes to Replay Room are documented here.
 
 - operator tokens are session-scoped by default, browser persistence requires explicit opt-in, and **Disconnect** clears credentials plus loaded incident state;
 - legacy always-persistent browser tokens are automatically downgraded to the current session;
-- release provenance and CycloneDX SBOMs use the unified `actions/attest@v4` path, with artifact downloads on `actions/download-artifact@v8`.
+- release provenance and CycloneDX SBOMs use the unified `actions/attest@v4` path, with artifact downloads on `actions/download-artifact@v8`;
+- Vite and its React plugin are classified as build-time dependencies, while Fastify integrations, BullMQ, Postgres, Zod, Vite, and Vitest are pinned to current compatible patch releases.
+
+### Security
+
+- upgraded `source-map-js` to `1.2.2` through the Vite/PostCSS toolchain to remediate GHSA-68fv-2mgg-jv7q;
+- CI now audits the complete dependency graph, including build tooling, for high-severity advisories.
 
 ## 0.1.2 - 2026-10-01
 
