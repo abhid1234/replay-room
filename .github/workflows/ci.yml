@@ -34,7 +34,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      # Build-time tooling processes repository input and ships the static console,
+      # so high-severity advisories in dev dependencies are release blockers too.
+      - run: npm audit --audit-level=high
 
   managed-services:
     runs-on: ubuntu-24.04
