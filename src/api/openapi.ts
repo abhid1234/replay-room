@@ -12,7 +12,7 @@ export const openApiDocument = {
     title: "Replay Room API",
     version: "0.2.0",
     summary: "Capture, diagnose, rehearse, and safely replay webhook incidents.",
-    description: "Public ingest is separated from bearer-protected operator endpoints. Replays require passing rehearsal evidence bound to the exact payload digest and destination, plus explicit acknowledgement when receiver acceptance is ambiguous.",
+    description: "Public ingest is separated from bearer-protected operator endpoints. Replays require passing rehearsal evidence bound to the exact payload digest and destination; high-risk replays additionally require a fresh approval from a different operator.",
     license: { name: "MIT", identifier: "MIT" },
   },
   externalDocs: { url: "https://github.com/abhid1234/replay-room", description: "Source, architecture, fixtures, and deployment guide" },
@@ -98,6 +98,9 @@ export const openApiDocument = {
     "/api/events/{eventId}/replay/preflight": {
       post: operatorPreflight(),
     },
+    "/api/events/{eventId}/replay/approval": {
+      post: operatorApproval(),
+    },
     "/api/events/{eventId}/replay": {
       post: operatorAction("Evaluate the replay guard and queue an approved replay", "replayEvent", "ReplayRequest", "Replay queued"),
     },
@@ -160,16 +163,28 @@ export const openApiDocument = {
         acknowledgeRisk: { type: "boolean", default: false },
       }),
       GuardCheck: object(["code", "label", "status", "message"], {
-        code: { enum: ["reason", "actor", "rehearsal", "rehearsal_result", "payload_binding", "destination_binding", "event_state", "risk_acknowledgement"] },
+        code: { enum: ["reason", "actor", "rehearsal", "rehearsal_result", "payload_binding", "destination_binding", "event_state", "risk_acknowledgement", "dual_control"] },
         label: { type: "string" },
         status: { enum: ["pass", "fail", "pending"] },
         message: { type: "string" },
       }),
-      ReplayPreflight: object(["allowed", "reasons", "checks", "risk"], {
+      ReplayApproval: object(["id", "eventId", "rehearsalId", "payloadSha256", "destinationUrl", "actor", "reason", "createdAt", "expiresAt"], {
+        id: uuid,
+        eventId: uuid,
+        rehearsalId: uuid,
+        payloadSha256: sha256,
+        destinationUrl: uri,
+        actor: { type: "string" },
+        reason: { type: "string" },
+        createdAt: dateTime,
+        expiresAt: dateTime,
+      }),
+      ReplayPreflight: object(["allowed", "reasons", "checks", "risk", "approval"], {
         allowed: { type: "boolean" },
         reasons: { type: "array", items: { type: "string" } },
-        checks: { type: "array", minItems: 8, maxItems: 8, items: { $ref: "#/components/schemas/GuardCheck" } },
+        checks: { type: "array", minItems: 9, maxItems: 9, items: { $ref: "#/components/schemas/GuardCheck" } },
         risk: { type: "object" },
+        approval: { anyOf: [{ $ref: "#/components/schemas/ReplayApproval" }, { type: "null" }] },
       }),
       ActionReceipt: object(["queued", "eventId", "mode", "deliveryIntentId"], {
         queued: { const: true }, eventId: uuid, mode: { enum: ["rehearsal", "replay"] }, deliveryIntentId: uuid, duplicate: { type: "boolean" },
@@ -198,7 +213,7 @@ function operatorEventGet(summary: string, operationId: string, schema: string) 
 function operatorAction(summary: string, operationId: string, requestSchema: string, successDescription: string) {
   return {
     tags: ["operator"], summary, operationId, security: bearerSecurity,
-    parameters: [{ name: "eventId", in: "path", required: true, schema: uuid }],
+    parameters: operatorEventParameters(),
     requestBody: { required: true, content: { "application/json": { schema: { $ref: `#/components/schemas/${requestSchema}` } } } },
     responses: { "202": response(successDescription, "ActionReceipt"), "400": response("Input or destination is unsafe", "Problem"), "401": response("Bearer token is missing or invalid", "Problem"), "404": response("Event not found", "Problem"), "409": response("Replay guard rejected the request", "Problem") },
   };
@@ -210,7 +225,7 @@ function operatorPreflight() {
     summary: "Evaluate every replay guard condition without changing state",
     operationId: "preflightReplay",
     security: bearerSecurity,
-    parameters: [{ name: "eventId", in: "path", required: true, schema: uuid }],
+    parameters: operatorEventParameters(),
     requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/ReplayPreflightRequest" } } } },
     responses: {
       "200": response("Replay guard decision trace", "ReplayPreflight"),
@@ -219,4 +234,29 @@ function operatorPreflight() {
       "404": response("Event not found", "Problem"),
     },
   };
+}
+
+function operatorApproval() {
+  return {
+    tags: ["operator"],
+    summary: "Record a time-bound, replay-bound approval for a high-risk incident",
+    operationId: "approveHighRiskReplay",
+    security: bearerSecurity,
+    parameters: operatorEventParameters(),
+    requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/ReplayRequest" } } } },
+    responses: {
+      "201": response("Replay approval recorded", "ReplayApproval"),
+      "400": response("Input or destination is unsafe", "Problem"),
+      "401": response("Bearer token is missing or invalid", "Problem"),
+      "404": response("Event not found", "Problem"),
+      "409": response("Approval guard rejected the request", "Problem"),
+    },
+  };
+}
+
+function operatorEventParameters() {
+  return [
+    { name: "eventId", in: "path", required: true, schema: uuid },
+    { name: "X-Operator", in: "header", required: true, schema: { type: "string", minLength: 1, maxLength: 120 } },
+  ];
 }

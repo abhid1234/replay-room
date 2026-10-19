@@ -13,6 +13,7 @@ const REQUIRED_OPENAPI_PATHS = [
   "/api/endpoints",
   "/api/events",
   "/api/events/{eventId}/replay/preflight",
+  "/api/events/{eventId}/replay/approval",
   "/api/events/{eventId}/rehearse",
   "/api/events/{eventId}/replay",
 ];
@@ -206,6 +207,7 @@ export async function runLiveCheck(config, overrides = {}) {
   assert(manifest.surfaces?.console === config.siteUrl, `launch proof console is ${manifest.surfaces?.console ?? 'missing'}, expected ${config.siteUrl}`);
   assert(manifest.surfaces?.openApi === '/openapi.json', 'launch proof OpenAPI path is incorrect');
   assert(Array.isArray(manifest.capabilities) && manifest.capabilities.includes('guarded-replay'), 'launch proof is missing guarded replay capability');
+  assert(manifest.capabilities.includes('two-person-approval'), 'launch proof is missing two-person approval capability');
 
   const siteResponse = await fetchWithTimeout(
     dependencies.fetch,

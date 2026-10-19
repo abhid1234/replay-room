@@ -12,6 +12,7 @@ const REQUIRED_PATHS = [
   '/api/endpoints',
   '/api/events',
   '/api/events/{eventId}/replay/preflight',
+  '/api/events/{eventId}/replay/approval',
   '/api/events/{eventId}/rehearse',
   '/api/events/{eventId}/replay',
 ];
@@ -48,7 +49,7 @@ function fixtureFetch({ healthFailures = 0, missingPath = '', corsOrigin = 'http
         version: manifestVersion,
         deployment: { platform: 'render', commit: 'abc1234' },
         surfaces: { console: manifestConsole, openApi: '/openapi.json' },
-        capabilities: ['durable-ingest', 'guarded-replay'],
+        capabilities: ['durable-ingest', 'guarded-replay', 'two-person-approval'],
       });
     }
     if (url === 'https://console.example.com' && method === 'GET') {
@@ -128,7 +129,7 @@ test('waits through a cold start and verifies health, contract, console, and COR
   assert.equal(result.status, 'passed');
   assert.deepEqual(result.coldStart, { attempts: 3, warmAfterMs: 2_000 });
   assert.equal(result.checks.health.databaseLatencyMs, 4);
-  assert.equal(result.checks.openApi.requiredPaths, 11);
+  assert.equal(result.checks.openApi.requiredPaths, 12);
   assert.deepEqual(result.checks.launchProof, { schemaVersion: 'replay-room.launch-proof/v1', version: '0.1.2', platform: 'render', commit: 'abc1234' });
   assert.deepEqual(result.checks.space, {
     demoMode: true,

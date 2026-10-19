@@ -88,6 +88,18 @@ export interface AuditEntry {
   createdAt: string;
 }
 
+export interface ReplayApproval {
+  id: string;
+  eventId: string;
+  rehearsalId: string;
+  payloadSha256: string;
+  destinationUrl: string;
+  actor: string;
+  reason: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface EventDetail extends WebhookEvent {
   endpoint: Endpoint;
   attempts: DeliveryAttempt[];

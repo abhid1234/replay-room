@@ -84,7 +84,7 @@ describe("webhook API", () => {
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
       info: { title: "Replay Room API", version: "0.2.0" },
-      paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay": {} },
+      paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay/approval": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });
   });
@@ -355,7 +355,7 @@ describe("webhook API", () => {
       ]),
       risk: { level: "low", requiresAcknowledgement: false },
     });
-    expect(preflight.json().checks).toHaveLength(8);
+    expect(preflight.json().checks).toHaveLength(9);
     expect(queue.jobs).toHaveLength(0);
     expect(store.audit).toHaveLength(0);
     expect(store.intents.size).toBe(0);
@@ -368,7 +368,7 @@ describe("webhook API", () => {
     expect(store.audit).toMatchObject([{ action: "replay.blocked", metadata: { guardChecks: expect.any(Array) } }]);
   });
 
-  it("blocks ambiguous replay until the operator acknowledges duplicate-side-effect risk", async () => {
+  it("requires fresh two-person approval for ambiguous high-risk replay", async () => {
     const store = new FakeStore();
     const queue = new FakeQueue();
     const created = await store.createEvent({
@@ -406,15 +406,40 @@ describe("webhook API", () => {
     const payload = { destinationUrl: "https://example.com/hook", reason: "Receiver owner confirmed the repair" };
 
     const blocked = await app.inject({ ...base, payload });
+    const acknowledgedButUnapproved = await app.inject({ ...base, payload: { ...payload, acknowledgeRisk: true } });
+    const approvalResponse = await app.inject({
+      ...base,
+      url: `/api/events/${created.event.id}/replay/approval`,
+      headers: { ...base.headers, "x-operator": "safety-reviewer" },
+      payload: { ...payload, acknowledgeRisk: true },
+    });
+    const selfApproved = await app.inject({
+      ...base,
+      headers: { ...base.headers, "x-operator": "safety-reviewer" },
+      payload: { ...payload, acknowledgeRisk: true },
+    });
     const approved = await app.inject({ ...base, payload: { ...payload, acknowledgeRisk: true } });
 
     expect(blocked.statusCode).toBe(409);
     expect(blocked.json().reasons).toContain("Explicitly acknowledge the duplicate-side-effect risk before replaying");
+    expect(acknowledgedButUnapproved.statusCode).toBe(409);
+    expect(acknowledgedButUnapproved.json().reasons).toContain("Record a high-risk approval before replaying");
+    expect(approvalResponse.statusCode).toBe(201);
+    expect(approvalResponse.json()).toMatchObject({
+      eventId: created.event.id,
+      actor: "safety-reviewer",
+      destinationUrl: "https://example.com/hook",
+    });
+    expect(selfApproved.statusCode).toBe(409);
+    expect(selfApproved.json().reasons).toContain("A different operator must execute the approved replay");
     expect(approved.statusCode).toBe(202);
     expect(queue.jobs).toHaveLength(1);
     expect(store.audit).toMatchObject([
       { action: "replay.blocked", metadata: { riskLevel: "high", riskAcknowledged: false } },
-      { action: "replay.approved", metadata: { riskLevel: "high", riskAcknowledged: true } },
+      { action: "replay.blocked", metadata: { riskLevel: "high", riskAcknowledged: true } },
+      { action: "replay.approval_recorded", actor: "safety-reviewer", metadata: { riskLevel: "high", riskAcknowledged: true } },
+      { action: "replay.blocked", actor: "safety-reviewer", metadata: { approvalId: approvalResponse.json().id } },
+      { action: "replay.approved", actor: "commander", metadata: { riskLevel: "high", riskAcknowledged: true, approvalId: approvalResponse.json().id, approvalActor: "safety-reviewer" } },
     ]);
 
     const detail = await app.inject({ method: "GET", url: `/api/events/${created.event.id}`, headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` } });

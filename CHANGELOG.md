@@ -4,6 +4,16 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+### Added
+
+- high-risk replay dual control with 30-minute approvals bound to the exact rehearsal, payload digest, and destination;
+- an audited replay-approval API and explicit operator identity in the console;
+- a ninth preflight condition that rejects missing, expired, drifted, or self-executed approvals.
+
+### Changed
+
+- the deployment doctor now requires the replay-approval OpenAPI path and `two-person-approval` launch capability.
+
 ## 0.2.0 - 2026-10-11
 
 ### Added

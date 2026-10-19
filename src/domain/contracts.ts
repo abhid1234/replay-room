@@ -10,6 +10,7 @@ import type {
   EventDetail,
   EventStatus,
   Rehearsal,
+  ReplayApproval,
   WebhookEvent,
 } from "./types.js";
 
@@ -94,6 +95,12 @@ export interface Store {
   addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">): Promise<DeliveryAttempt>;
   addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">): Promise<Rehearsal>;
   latestRehearsal(eventId: string): Promise<Rehearsal | null>;
+  latestReplayApproval(
+    eventId: string,
+    rehearsalId: string,
+    payloadSha256: string,
+    destinationUrl: string,
+  ): Promise<ReplayApproval | null>;
   addAudit(input: Omit<AuditEntry, "id" | "createdAt">): Promise<AuditEntry>;
   createDeliveryIntent(
     jobKey: string,

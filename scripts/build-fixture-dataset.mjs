@@ -71,6 +71,9 @@ async function buildDataset() {
       event: { ...replayGuard.event, ...(guardCase.eventPatch ?? {}) },
       rehearsal: guardCase.rehearsal,
       request: guardCase.request,
+      ...(guardCase.risk ? { risk: guardCase.risk } : {}),
+      ...(guardCase.approval ? { approval: guardCase.approval } : {}),
+      ...(guardCase.now ? { now: guardCase.now } : {}),
       expected: guardCase.expected,
     };
   });

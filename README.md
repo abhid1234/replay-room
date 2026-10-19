@@ -22,6 +22,7 @@ Recent developer discussions keep converging on the same operational gap: receiv
 - a dead-letter state with complete attempt history;
 - rehearsal against a controlled endpoint;
 - a replay guard that binds approval to the rehearsed payload hash and destination;
+- 30-minute, two-person approval for high-risk replays, bound to the exact rehearsal, payload, and destination;
 - operator reason and append-only audit history;
 - a Postgres delivery-intent outbox that survives queue loss, suppresses duplicate replay approvals, and lets reconciliation reconstruct exact jobs.
 
@@ -96,7 +97,9 @@ A replay is accepted only when all of these are true:
 
 Every approval and rejection records the risk level and acknowledgement in the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
-Before approval, the console runs a side-effect-free replay preflight and renders all eight guard conditions as pass, fail, or pending: operator reason, identity, rehearsal existence and outcome, payload binding, destination binding, dead-letter state, and duplicate-risk acknowledgement. Changing any input invalidates the visible decision and disables approval until the guard is checked again. The replay endpoint independently reevaluates the same guard, so the UI is guidance rather than authority. The newest rehearsal is authoritative—even an older passing rehearsal cannot bypass a newer failure.
+Before approval, the console runs a side-effect-free replay preflight and renders all nine guard conditions as pass, fail, or pending: operator reason, identity, rehearsal existence and outcome, payload binding, destination binding, dead-letter state, duplicate-risk acknowledgement, and two-person control. Changing any input or operator identity invalidates the visible decision and disables approval until the guard is checked again. The replay endpoint independently reevaluates the same guard, so the UI is guidance rather than authority. The newest rehearsal is authoritative—even an older passing rehearsal cannot bypass a newer failure.
+
+When receiver acceptance is ambiguous or idempotency evidence is missing, acknowledgement alone is not enough. One operator records an approval that expires after 30 minutes and is cryptographically scoped by the durable ledger to the current rehearsal, payload digest, and destination. A different named operator must then rerun preflight and execute the replay. Payload drift, destination drift, a newer rehearsal, expiration, or self-approval closes the gate automatically.
 
 ## Quick start
 
@@ -149,6 +152,7 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | `GET` | `/api/events/:id/evidence` | Download the HMAC-sealed incident evidence bundle |
 | `POST` | `/api/events/:id/rehearse` | Queue a safe rehearsal |
 | `POST` | `/api/events/:id/replay/preflight` | Evaluate every replay guard condition without changing state |
+| `POST` | `/api/events/:id/replay/approval` | Record a time-bound approval for a high-risk replay |
 | `POST` | `/api/events/:id/replay` | Run the replay guard and queue an approved replay |
 
 Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when taking an operator action.
@@ -167,6 +171,7 @@ Admin routes require `Authorization: Bearer $ADMIN_TOKEN`. Set `x-operator` when
 - Retryable responses honor `Retry-After` delta-seconds or HTTP dates, never retry earlier than local exponential backoff, clamp receiver-directed waits to 15 minutes, and atomically persist the next intent with its audit evidence before dispatch. PostgreSQL enforces the durable availability timestamp again at claim time and serializes non-rehearsal sends per event; processing-claim fencing and delivered-wins precedence prevent stale or concurrent cycles from regressing state or issuing a second outbound request.
 - Response capture is bounded to 4 KiB before storage.
 - Replays cannot bypass rehearsal, payload binding, destination binding, or dead-letter state.
+- High-risk replays require an unexpired approval from an operator other than the one executing the replay.
 - Postgres-backed delivery-intent claims suppress duplicate queue execution and preserve exact replay metadata through Key Value loss.
 - Incident exports use a separately generated evidence-signing secret and disable response caching.
 
@@ -204,10 +209,12 @@ GitHub Actions runs the repository verification gate on every branch push and pu
 3. Let the worker exhaust retries into `dead_letter`.
 4. Open the flight-recorder diagnosis and complete attempt timeline.
 5. Rehearse against the accepting sink.
-6. Run replay preflight and inspect the eight-condition decision trace.
-7. Change the destination and show the preflight invalidate and block approval.
-8. Restore the rehearsed destination, acknowledge any duplicate risk, and replay with an operator reason.
-9. Open `render.yaml` and map each behavior to its Render service.
+6. Run replay preflight and inspect the nine-condition decision trace.
+7. For a high-risk event, record approval as the safety reviewer, then show that self-approval is still blocked.
+8. Switch to the incident commander and rerun preflight to satisfy two-person control.
+9. Change the destination and show the approval binding and preflight invalidate.
+10. Restore the rehearsed destination and replay with the second operator's identity and reason.
+11. Open `render.yaml` and map each behavior to its Render service.
 
 ## Status
 

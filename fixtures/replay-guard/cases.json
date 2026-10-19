@@ -33,7 +33,7 @@
       "expected": {
         "allowed": true,
         "reasons": [],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -47,7 +47,7 @@
       "expected": {
         "allowed": false,
         "reasons": ["Run a successful rehearsal before replaying"],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "fail", "rehearsal_result": "pending", "payload_binding": "pending", "destination_binding": "pending", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "fail", "rehearsal_result": "pending", "payload_binding": "pending", "destination_binding": "pending", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -70,7 +70,7 @@
       "expected": {
         "allowed": false,
         "reasons": ["The destination changed after rehearsal"],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "fail", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "fail", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -93,7 +93,7 @@
       "expected": {
         "allowed": false,
         "reasons": ["A replay reason of at least 10 characters is required", "An actor is required"],
-        "checks": { "reason": "fail", "actor": "fail", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "fail", "actor": "fail", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -116,7 +116,7 @@
       "expected": {
         "allowed": false,
         "reasons": ["The payload changed after rehearsal"],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "fail", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "fail", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -139,7 +139,7 @@
       "expected": {
         "allowed": false,
         "reasons": ["The latest rehearsal did not pass"],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "fail", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "fail", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     },
     {
@@ -163,7 +163,82 @@
       "expected": {
         "allowed": false,
         "reasons": ["Only dead-letter events can be replayed"],
-        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "fail", "risk_acknowledgement": "pass" }
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "fail", "risk_acknowledgement": "pass", "dual_control": "pass" }
+      }
+    },
+    {
+      "id": "high-risk-missing-approval-blocks",
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "incident-commander",
+        "reason": "Receiver repair and duplicate risk reviewed",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "acknowledgeRisk": true
+      },
+      "risk": {
+        "level": "high",
+        "requiresAcknowledgement": true,
+        "headline": "Replay can duplicate a side effect",
+        "summary": "Synthetic ambiguous receiver outcome",
+        "signals": [{ "code": "ambiguous_network_outcome", "severity": "high", "message": "No HTTP response was observed." }]
+      },
+      "now": "2026-09-27T17:15:00.000Z",
+      "expected": {
+        "allowed": false,
+        "reasons": ["Record a high-risk approval before replaying"],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "fail" }
+      }
+    },
+    {
+      "id": "high-risk-distinct-operator-allows-replay",
+      "rehearsal": {
+        "id": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "passed": true,
+        "statusCode": 202,
+        "notes": "Synthetic receiver accepted the exact payload",
+        "createdAt": "2026-09-27T17:10:00.000Z"
+      },
+      "request": {
+        "actor": "incident-commander",
+        "reason": "Receiver repair and duplicate risk reviewed",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "acknowledgeRisk": true
+      },
+      "risk": {
+        "level": "high",
+        "requiresAcknowledgement": true,
+        "headline": "Replay can duplicate a side effect",
+        "summary": "Synthetic ambiguous receiver outcome",
+        "signals": [{ "code": "ambiguous_network_outcome", "severity": "high", "message": "No HTTP response was observed." }]
+      },
+      "approval": {
+        "id": "c1c69e0c-9d8a-4bfd-b7cf-1a2eb1da5345",
+        "eventId": "e1d6f07c-3636-4a88-a11e-da0b7e8acac7",
+        "rehearsalId": "d9b955e2-fe2a-44c7-80c6-25e1b9b23c50",
+        "payloadSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "destinationUrl": "https://receiver.example/webhooks/payments",
+        "actor": "safety-reviewer",
+        "reason": "Reviewed the ambiguous outcome and receiver evidence",
+        "createdAt": "2026-09-27T17:12:00.000Z",
+        "expiresAt": "2026-09-27T17:42:00.000Z"
+      },
+      "now": "2026-09-27T17:15:00.000Z",
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "checks": { "reason": "pass", "actor": "pass", "rehearsal": "pass", "rehearsal_result": "pass", "payload_binding": "pass", "destination_binding": "pass", "event_state": "pass", "risk_acknowledgement": "pass", "dual_control": "pass" }
       }
     }
   ]

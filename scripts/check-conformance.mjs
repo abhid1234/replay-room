@@ -37,7 +37,14 @@ for (const fixtureCase of manifest.cases) {
 const guardFixture = JSON.parse(await readFile(resolve(root, "fixtures", manifest.replayGuardFile), "utf8"));
 for (const guardCase of guardFixture.cases) {
   const event = { ...guardFixture.event, ...(guardCase.eventPatch ?? {}) };
-  const decision = evaluateReplay(event, guardCase.rehearsal, guardCase.request);
+  const decision = evaluateReplay(
+    event,
+    guardCase.rehearsal,
+    guardCase.request,
+    guardCase.risk,
+    guardCase.approval,
+    guardCase.now ? Date.parse(guardCase.now) : Date.now(),
+  );
   const actual = {
     allowed: decision.allowed,
     reasons: decision.reasons,

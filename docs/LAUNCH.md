@@ -27,11 +27,11 @@ A dead-letter event cannot go directly back to production. The operator first ru
 
 The replay guard then checks dead-letter state, operator identity, a meaningful reason, a passing rehearsal, payload equality, and destination equality. Any drift blocks the action and writes the rejection to the audit trail.
 
-Operators can first run the exact same guard as a read-only preflight. The console exposes each condition as pass, fail, or pending and refuses to enable approval after any input changes until the decision is recomputed. The production action still reevaluates every condition on the server; the checklist explains authority but never replaces it.
+Operators can first run the exact same guard as a read-only preflight. The console exposes each condition as pass, fail, or pending and refuses to enable replay after any input or operator-identity change until the decision is recomputed. The production action still reevaluates every condition on the server; the checklist explains authority but never replaces it.
 
 The result is intentionally inconvenient in one useful way: changing the target or payload invalidates the previous proof. The operator must rehearse again.
 
-Replay Room also asks whether the receiver may already have acted. A missing idempotency key, a connection failure without an HTTP response, or a prior success response produces a high duplicate-side-effect risk. The console explains the exact signals and requires explicit acknowledgement before the guard can approve the replay. The system does not pretend ambiguity is certainty; it makes the operator own the residual risk.
+Replay Room also asks whether the receiver may already have acted. A missing idempotency key, a connection failure without an HTTP response, or a prior success response produces a high duplicate-side-effect risk. The console explains the exact signals and requires explicit acknowledgement before the guard can approve the replay. It then requires a fresh, 30-minute approval from one operator and execution by a different operator; the approval is bound to the exact rehearsal, payload digest, and destination. The system does not pretend ambiguity is certainty or let one person quietly waive it.
 
 ## Portable incident evidence
 
@@ -67,7 +67,7 @@ The repository ships more than a UI:
 - a versioned OpenAPI 3.1 contract;
 - a strict runtime schema and public JSON Schema for evidence bundles;
 - a public [Hugging Face dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures) with six synthetic incident fixtures covering outages, throttling, contract rejection, network failure, active recovery, and an ambiguous payment without idempotency evidence;
-- seven replay-guard conformance cases, including payload and destination drift;
+- nine replay-guard conformance cases, including payload and destination drift plus two-person high-risk approval;
 - unit and API tests, plus CI against real Postgres 17 and Redis 8 service containers;
 - dependency audit, CodeQL, a clean container build, package-content checks, registry integrity checks, a CycloneDX SBOM, and provenance-ready release automation;
 - Mermaid, SVG, PNG, and editable Excalidraw architecture assets.
