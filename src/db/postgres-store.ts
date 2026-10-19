@@ -14,6 +14,7 @@ import type {
   EndpointReliability,
   EventDetail,
   Rehearsal,
+  ReplayApproval,
   WebhookEvent,
 } from "../domain/types.js";
 
@@ -233,6 +234,26 @@ export class PostgresStore implements Store {
       [eventId],
     );
     return result.rowCount ? mapRehearsal(result.rows[0] as Row) : null;
+  }
+
+  async latestReplayApproval(
+    eventId: string,
+    rehearsalId: string,
+    payloadSha256: string,
+    destinationUrl: string,
+  ): Promise<ReplayApproval | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM audit_log
+       WHERE event_id = $1
+         AND action = 'replay.approval_recorded'
+         AND metadata->>'rehearsalId' = $2
+         AND metadata->>'payloadSha256' = $3
+         AND metadata->>'destinationUrl' = $4
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [eventId, rehearsalId, payloadSha256, destinationUrl],
+    );
+    return result.rowCount ? mapReplayApproval(result.rows[0] as Row) : null;
   }
 
   async addAudit(input: Omit<AuditEntry, "id" | "createdAt">): Promise<AuditEntry> {
@@ -717,6 +738,28 @@ function mapRehearsal(row: Row): Rehearsal {
     id: String(row.id), eventId: String(row.event_id), payloadSha256: String(row.payload_sha256),
     destinationUrl: String(row.destination_url), passed: Boolean(row.passed),
     statusCode: row.status_code === null ? null : Number(row.status_code), notes: String(row.notes), createdAt: iso(row.created_at),
+  };
+}
+
+function mapReplayApproval(row: Row): ReplayApproval {
+  const audit = mapAudit(row);
+  const rehearsalId = audit.metadata.rehearsalId;
+  const payloadSha256 = audit.metadata.payloadSha256;
+  const destinationUrl = audit.metadata.destinationUrl;
+  const expiresAt = audit.metadata.expiresAt;
+  if ([rehearsalId, payloadSha256, destinationUrl, expiresAt].some((value) => typeof value !== "string")) {
+    throw new Error(`Replay approval ${audit.id} has invalid binding metadata`);
+  }
+  return {
+    id: audit.id,
+    eventId: audit.eventId,
+    rehearsalId: rehearsalId as string,
+    payloadSha256: payloadSha256 as string,
+    destinationUrl: destinationUrl as string,
+    actor: audit.actor,
+    reason: audit.reason ?? "",
+    createdAt: audit.createdAt,
+    expiresAt: expiresAt as string,
   };
 }
 

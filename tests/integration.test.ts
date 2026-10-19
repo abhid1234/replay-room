@@ -58,7 +58,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       error: null,
       durationMs: 42,
     });
-    await store.addRehearsal({
+    const rehearsal = await store.addRehearsal({
       eventId: first.event.id,
       payloadSha256: input.payloadSha256,
       destinationUrl: endpoint.destinationUrl,
@@ -72,6 +72,19 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       actor: "integration-test",
       reason: null,
       metadata: { fixture: "invoice-paid" },
+    });
+    const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+    const approvalAudit = await store.addAudit({
+      eventId: first.event.id,
+      action: "replay.approval_recorded",
+      actor: "safety-reviewer",
+      reason: "Reviewed the exact rehearsal and destination",
+      metadata: {
+        rehearsalId: rehearsal.id,
+        payloadSha256: input.payloadSha256,
+        destinationUrl: endpoint.destinationUrl,
+        expiresAt,
+      },
     });
 
     const detail = await store.getEvent(first.event.id);
@@ -91,6 +104,18 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       p95LatencyMs: 42,
       state: "healthy",
     }]);
+    expect(await store.latestReplayApproval(first.event.id, rehearsal.id, input.payloadSha256, endpoint.destinationUrl)).toEqual({
+      id: approvalAudit.id,
+      eventId: first.event.id,
+      rehearsalId: rehearsal.id,
+      payloadSha256: input.payloadSha256,
+      destinationUrl: endpoint.destinationUrl,
+      actor: "safety-reviewer",
+      reason: "Reviewed the exact rehearsal and destination",
+      createdAt: approvalAudit.createdAt,
+      expiresAt,
+    });
+    expect(await store.latestReplayApproval(first.event.id, rehearsal.id, input.payloadSha256, "https://example.com/drifted")).toBeNull();
   });
 
   it("uses Redis atomically for shared ingest limits and dependency health", async () => {

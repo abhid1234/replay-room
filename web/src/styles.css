@@ -211,7 +211,11 @@ input:focus, textarea:focus, select:focus { border-color: var(--mint); }
 .guard-trace b, .guard-trace small { display: block; }.guard-trace b { font-size: 11px; font-weight: 500; }.guard-trace small { margin-top: 5px; color: var(--muted); font: 400 9px/1.45 "IBM Plex Mono", monospace; }
 pre { height: 190px; overflow: auto; margin: 0 0 18px; padding: 16px; background: #041219; border: 1px solid var(--line); color: var(--mint); font: 11px/1.6 "IBM Plex Mono", monospace; }
 .action-form { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 10px; }.action-form label { margin: 0; }.action-form textarea { min-height: 70px; resize: vertical; }
-.actions { grid-column: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }.action-form button { margin: 0; }.action-form .preflight-button { background: var(--sky); }.action-form .preflight-button:disabled { cursor: wait; }.action-form .danger-button { background: var(--red); }
+.actions { grid-column: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }.action-form button { margin: 0; }.action-form .approval-button { background: var(--amber); color: #17120a; }.action-form .preflight-button { background: var(--sky); }.action-form .preflight-button:disabled { cursor: wait; }.action-form .danger-button { background: var(--red); }
+.approval-receipt { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline; margin: 12px 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--amber) 60%, var(--line)); background: color-mix(in srgb, var(--amber) 10%, var(--panel)); }
+.approval-receipt span { color: var(--muted); font: 600 9px/1.2 "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+.approval-receipt strong { color: var(--amber); font: 600 12px/1.2 "IBM Plex Mono", monospace; }
+.approval-receipt small { grid-column: 2; color: var(--muted); font: 400 10px/1.4 "IBM Plex Mono", monospace; }
 .timeline { margin-top: 20px; border-top: 1px solid var(--line); }.timeline div { display: grid; grid-template-columns: 90px 150px 1fr; padding: 11px 0; border-bottom: 1px solid rgba(159, 247, 215, .09); font-size: 11px; }.timeline span,.timeline small { color: var(--muted); }.timeline strong { color: var(--mint); font: 500 10px "IBM Plex Mono", monospace; }
 .bottom-grid { display: grid; grid-template-columns: .88fr 1.25fr; gap: 22px; margin-top: 22px; }
 .endpoint-form { padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

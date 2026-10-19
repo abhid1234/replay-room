@@ -7,7 +7,7 @@
   "source": "https://github.com/abhid1234/replay-room",
   "recordCounts": {
     "incidents": 6,
-    "replayGuard": 7
+    "replayGuard": 9
   },
   "files": {
     "data/incidents.jsonl": {
@@ -15,8 +15,8 @@
       "sha256": "896b5df5c62e2d89712338811e01c4e8d749c3d4bf0492485cc61028e425774e"
     },
     "data/replay-guard.jsonl": {
-      "bytes": 8470,
-      "sha256": "a54930a8bdd9d2b00358d3ac8b5f5216c7a8cb6e8d06a71f60670eafd216b40e"
+      "bytes": 12327,
+      "sha256": "231b2f3aa23ab43d6ad9632ac96c718e3e967f6a348d60ea4908a2f5034f991a"
     }
   }
 }

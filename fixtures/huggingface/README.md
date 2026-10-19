@@ -29,7 +29,7 @@ This dataset contains deterministic, entirely synthetic webhook incident transcr
 ## Configurations
 
 - `incidents`: six event transcripts with the expected deterministic diagnosis and duplicate-side-effect risk level.
-- `replay_guard`: seven approval and rejection cases covering missing or failed rehearsal, payload drift, destination drift, operator context, and event state.
+- `replay_guard`: nine approval and rejection cases covering missing or failed rehearsal, payload drift, destination drift, operator context, event state, missing high-risk approval, and successful distinct-operator control.
 
 Every destination uses the IANA-reserved `.example` domain. The build rejects signing secrets, credential-like headers, non-synthetic ingest keys, duplicate case IDs, and non-reserved receiver hosts. No customer traffic, real provider event, personal data, or production secret is included.
 

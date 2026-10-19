@@ -2,14 +2,14 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { evaluateReplay } from "../src/domain/replay-guard.js";
-import { assessReplayRisk } from "../src/domain/replay-risk.js";
+import { assessReplayRisk, type ReplayRiskAssessment } from "../src/domain/replay-risk.js";
 import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { diagnoseEvent } from "../src/domain/diagnosis.js";
 import { createEvidenceBundle, verifyEvidenceBundle } from "../src/domain/evidence.js";
 import { isRetryableStatus, MAX_RETRY_AFTER_MS, parseRetryAfter, planRetry, retryDelayMs } from "../src/domain/retry.js";
 import { assertSafeDestination, createDestinationLookup, redactHeaders, resolveSafeDestination, sha256, signPayload, signWebhookPayload, verifySignature, verifyWebhookSignature } from "../src/domain/security.js";
 import { heartbeatAgeSeconds, heartbeatState } from "../src/domain/system.js";
-import type { EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
+import type { EventDetail, Rehearsal, ReplayApproval, WebhookEvent } from "../src/domain/types.js";
 
 const event: WebhookEvent = {
   id: "3a553dce-f3c5-4da7-a612-857389682d06", endpointId: "6d1bda7a-8615-4c03-8095-3600e826f0f7",
@@ -22,11 +22,23 @@ const rehearsal: Rehearsal = {
   destinationUrl: "https://example.com/hook", passed: true, statusCode: 204, notes: "ok", createdAt: "2026-09-27T00:02:00.000Z",
 };
 
+const approval: ReplayApproval = {
+  id: "ae7cbcc1-5e5a-45da-bbed-9f72b837a5c2",
+  eventId: event.id,
+  rehearsalId: rehearsal.id,
+  payloadSha256: event.payloadSha256,
+  destinationUrl: rehearsal.destinationUrl,
+  actor: "safety-reviewer",
+  reason: "Reviewed receiver evidence and duplicate-side-effect risk",
+  createdAt: "2026-09-27T00:03:00.000Z",
+  expiresAt: "2026-09-27T00:33:00.000Z",
+};
+
 describe("replay guard", () => {
   it("allows a dead letter only when passing evidence binds payload and target", () => {
     const decision = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl });
     expect(decision).toMatchObject({ allowed: true, reasons: [] });
-    expect(decision.checks).toHaveLength(8);
+    expect(decision.checks).toHaveLength(9);
     expect(decision.checks.every((item) => item.status === "pass")).toBe(true);
   });
   it("blocks target drift and payload drift", () => {
@@ -39,14 +51,29 @@ describe("replay guard", () => {
     const risk = assessReplayRisk(detailWithAttempts([
       { id: "network-1", eventId: event.id, mode: "live", destinationUrl: rehearsal.destinationUrl, statusCode: null, responseBody: null, error: "socket closed", durationMs: 500, createdAt: event.updatedAt },
     ], null));
-    const denied = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl }, risk);
-    const accepted = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true }, risk);
+    const now = Date.parse("2026-09-27T00:10:00.000Z");
+    const denied = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl }, risk, null, now);
+    const waitingForApproval = evaluateReplay(event, rehearsal, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true }, risk, null, now);
+    const selfApproved = evaluateReplay(event, rehearsal, { actor: "safety-reviewer", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true }, risk, approval, now);
+    const accepted = evaluateReplay(event, rehearsal, { actor: "incident-commander", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true }, risk, approval, now);
 
     expect(risk).toMatchObject({ level: "high", requiresAcknowledgement: true });
     expect(denied.reasons).toContain("Explicitly acknowledge the duplicate-side-effect risk before replaying");
     expect(denied.checks.find((item) => item.code === "risk_acknowledgement")).toMatchObject({ status: "fail" });
+    expect(waitingForApproval.reasons).toContain("Record a high-risk approval before replaying");
+    expect(selfApproved.reasons).toContain("A different operator must execute the approved replay");
     expect(accepted).toMatchObject({ allowed: true, reasons: [] });
     expect(accepted.checks.find((item) => item.code === "risk_acknowledgement")).toMatchObject({ status: "pass" });
+    expect(accepted.checks.find((item) => item.code === "dual_control")).toMatchObject({ status: "pass" });
+  });
+  it("expires high-risk approvals and binds them to the exact replay inputs", () => {
+    const risk: ReplayRiskAssessment = { level: "high", requiresAcknowledgement: true, headline: "High risk", summary: "Needs review", signals: [] };
+    const request = { actor: "incident-commander", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl, acknowledgeRisk: true };
+    const expired = evaluateReplay(event, rehearsal, request, risk, approval, Date.parse(approval.expiresAt));
+    const drifted = evaluateReplay(event, rehearsal, request, risk, { ...approval, payloadSha256: "b".repeat(64) }, Date.parse("2026-09-27T00:10:00.000Z"));
+
+    expect(expired.reasons).toContain("The high-risk approval expired; record a fresh approval");
+    expect(drifted.reasons).toContain("The high-risk approval does not match this rehearsal, payload, and destination");
   });
   it("keeps dependent evidence checks pending until a rehearsal exists", () => {
     const decision = evaluateReplay(event, null, { actor: "abhi", reason: "Verified the receiver fix", destinationUrl: rehearsal.destinationUrl });

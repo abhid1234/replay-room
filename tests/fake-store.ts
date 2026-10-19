@@ -3,7 +3,7 @@ import type { CreateEventInput, CreateEventResult, DeliveryIntentSchedule, Deliv
 import { assertRetryTransitionIdentity, DELIVERY_INTENT_LEASE_MS, EVENT_BUSY_RETRY_MS, sameDeliveryJob } from "../src/domain/delivery-intent.js";
 import { deliveryRate, reliabilityState } from "../src/domain/reliability.js";
 import { parseRetryAfter } from "../src/domain/retry.js";
-import type { AuditEntry, DashboardStats, DeliveryAttempt, DeliveryIntent, Endpoint, EndpointReliability, EventDetail, Rehearsal, WebhookEvent } from "../src/domain/types.js";
+import type { AuditEntry, DashboardStats, DeliveryAttempt, DeliveryIntent, Endpoint, EndpointReliability, EventDetail, Rehearsal, ReplayApproval, WebhookEvent } from "../src/domain/types.js";
 
 export class FakeStore implements Store {
   now: () => number = Date.now;
@@ -79,7 +79,26 @@ export class FakeStore implements Store {
   async addAttempt(input: Omit<DeliveryAttempt, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.attempts.push(row); return row; }
   async addRehearsal(input: Omit<Rehearsal, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.rehearsals.push(row); return row; }
   async latestRehearsal(eventId: string) { return [...this.rehearsals].reverse().find((item) => item.eventId === eventId) ?? null; }
-  async addAudit(input: Omit<AuditEntry, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date().toISOString() }; this.audit.push(row); return row; }
+  async latestReplayApproval(eventId: string, rehearsalId: string, payloadSha256: string, destinationUrl: string): Promise<ReplayApproval | null> {
+    const audit = [...this.audit].reverse().find((entry) => entry.eventId === eventId
+      && entry.action === "replay.approval_recorded"
+      && entry.metadata.rehearsalId === rehearsalId
+      && entry.metadata.payloadSha256 === payloadSha256
+      && entry.metadata.destinationUrl === destinationUrl);
+    if (!audit) return null;
+    return {
+      id: audit.id,
+      eventId: audit.eventId,
+      rehearsalId: String(audit.metadata.rehearsalId),
+      payloadSha256: String(audit.metadata.payloadSha256),
+      destinationUrl: String(audit.metadata.destinationUrl),
+      actor: audit.actor,
+      reason: audit.reason ?? "",
+      createdAt: audit.createdAt,
+      expiresAt: String(audit.metadata.expiresAt),
+    };
+  }
+  async addAudit(input: Omit<AuditEntry, "id" | "createdAt">) { const row = { ...input, id: randomUUID(), createdAt: new Date(this.now()).toISOString() }; this.audit.push(row); return row; }
   async createDeliveryIntent(jobKey: string, job: DeliveryJob, schedule: DeliveryIntentSchedule = {}) {
     const delayMs = schedule.delayMs ?? 0;
     if (!Number.isSafeInteger(delayMs) || delayMs < 0) throw new Error("Delivery intent delay must be a non-negative integer");

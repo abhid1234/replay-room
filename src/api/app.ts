@@ -53,6 +53,8 @@ const replayPreflightSchema = replaySchema.extend({
   reason: z.string().trim().max(500).default(""),
 });
 
+const REPLAY_APPROVAL_TTL_MS = 30 * 60 * 1_000;
+
 export async function buildApp({ config, store, queue }: Dependencies): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
@@ -142,10 +144,10 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         fixtures: "https://huggingface.co/datasets/abhid1234/replay-room-fixtures",
         demo: "https://huggingface.co/spaces/abhid1234/replay-room",
       },
-      capabilities: ["durable-ingest", "bounded-retry", "incident-diagnosis", "rehearsal", "guarded-replay", "signed-evidence"],
+      capabilities: ["durable-ingest", "bounded-retry", "incident-diagnosis", "rehearsal", "guarded-replay", "two-person-approval", "signed-evidence"],
       safety: {
         operatorAuth: "bearer",
-        replayPolicy: "rehearsal-and-eight-condition-preflight",
+        replayPolicy: "rehearsal-and-nine-condition-preflight-with-dual-control",
         evidenceIntegrity: "HMAC-SHA256",
         privateNetworkEgress: config.ALLOW_PRIVATE_TARGETS ? "enabled" : "blocked",
       },
@@ -241,7 +243,7 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       cycleId: `rehearsal-${randomBytes(8).toString("hex")}`,
       attemptNumber: 1,
       destinationUrl: input.destinationUrl,
-      actor: actorFrom(request.headers),
+      actor: actorFrom(request.headers) || "operator",
       reason: input.notes || "Operator-requested rehearsal",
     } as const;
     const scheduled = await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
@@ -258,17 +260,20 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     const rehearsal = await store.latestRehearsal(id);
     const actor = actorFrom(request.headers);
     const risk = assessReplayRisk(event);
+    const approval = rehearsal && risk.requiresAcknowledgement
+      ? await store.latestReplayApproval(id, rehearsal.id, event.payloadSha256, input.destinationUrl)
+      : null;
     const decision = evaluateReplay(event, rehearsal, {
       actor,
       reason: input.reason,
       destinationUrl: input.destinationUrl,
       acknowledgeRisk: input.acknowledgeRisk,
-    }, risk);
+    }, risk, approval);
     reply.header("cache-control", "no-store");
-    return { ...decision, risk };
+    return { ...decision, risk, approval };
   });
 
-  app.post("/api/events/:id/replay", { preHandler: adminGuard(config) }, async (request, reply) => {
+  app.post("/api/events/:id/replay/approval", { preHandler: adminGuard(config) }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const input = replaySchema.parse(request.body);
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
@@ -282,14 +287,77 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
       reason: input.reason,
       destinationUrl: input.destinationUrl,
       acknowledgeRisk: input.acknowledgeRisk,
-    }, risk);
+    }, risk, null);
+    const baseReasons = decision.checks
+      .filter((check) => check.code !== "dual_control" && check.status === "fail")
+      .map((check) => check.message);
+    if (!risk.requiresAcknowledgement) {
+      return reply.code(409).send({ error: "This replay does not require two-person approval", reasons: [] });
+    }
+    if (baseReasons.length > 0 || !rehearsal) {
+      await store.addAudit({
+        eventId: id,
+        action: "replay.approval_blocked",
+        actor,
+        reason: input.reason,
+        metadata: { destinationUrl: input.destinationUrl, guardReasons: baseReasons, guardChecks: decision.checks, riskLevel: risk.level },
+      });
+      return reply.code(409).send({ error: "Replay approval guard blocked this request", reasons: baseReasons });
+    }
+    const expiresAt = new Date(Date.now() + REPLAY_APPROVAL_TTL_MS).toISOString();
+    const audit = await store.addAudit({
+      eventId: id,
+      action: "replay.approval_recorded",
+      actor,
+      reason: input.reason,
+      metadata: {
+        rehearsalId: rehearsal.id,
+        payloadSha256: event.payloadSha256,
+        destinationUrl: input.destinationUrl,
+        riskLevel: risk.level,
+        riskAcknowledged: input.acknowledgeRisk,
+        expiresAt,
+      },
+    });
+    reply.code(201);
+    return {
+      id: audit.id,
+      eventId: id,
+      rehearsalId: rehearsal.id,
+      payloadSha256: event.payloadSha256,
+      destinationUrl: input.destinationUrl,
+      actor,
+      reason: input.reason,
+      createdAt: audit.createdAt,
+      expiresAt,
+    };
+  });
+
+  app.post("/api/events/:id/replay", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const input = replaySchema.parse(request.body);
+    assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
+    const event = await store.getEvent(id);
+    if (!event) return reply.code(404).send({ error: "Event not found" });
+    const rehearsal = await store.latestRehearsal(id);
+    const actor = actorFrom(request.headers);
+    const risk = assessReplayRisk(event);
+    const approval = rehearsal && risk.requiresAcknowledgement
+      ? await store.latestReplayApproval(id, rehearsal.id, event.payloadSha256, input.destinationUrl)
+      : null;
+    const decision = evaluateReplay(event, rehearsal, {
+      actor,
+      reason: input.reason,
+      destinationUrl: input.destinationUrl,
+      acknowledgeRisk: input.acknowledgeRisk,
+    }, risk, approval);
     if (!decision.allowed) {
       await store.addAudit({
         eventId: id,
         action: "replay.blocked",
         actor,
         reason: input.reason,
-        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons, guardChecks: decision.checks, riskLevel: risk.level, riskAcknowledged: input.acknowledgeRisk },
+        metadata: { destinationUrl: input.destinationUrl, guardReasons: decision.reasons, guardChecks: decision.checks, riskLevel: risk.level, riskAcknowledged: input.acknowledgeRisk, approvalId: approval?.id ?? null },
       });
       return reply.code(409).send({ error: "Replay guard blocked this request", reasons: decision.reasons });
     }
@@ -317,6 +385,8 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
         jobKey,
         riskLevel: risk.level,
         riskAcknowledged: input.acknowledgeRisk,
+        approvalId: approval?.id ?? null,
+        approvalActor: approval?.actor ?? null,
       },
     });
     if (scheduled.intent.state !== "completed") {
@@ -416,7 +486,7 @@ function adminGuard(config: AppConfig) {
 }
 
 function actorFrom(headers: Record<string, unknown>): string {
-  return stringHeader(headers["x-operator"])?.slice(0, 120) || "operator";
+  return stringHeader(headers["x-operator"])?.slice(0, 120) || "";
 }
 
 function stringHeader(value: unknown): string | null {
