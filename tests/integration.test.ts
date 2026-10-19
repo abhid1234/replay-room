@@ -95,7 +95,10 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
       endpoint: { name: "CI receiver" },
       attempts: [{ statusCode: 202, durationMs: 42 }],
       rehearsals: [{ passed: true }],
-      audit: [{ actor: "integration-test" }],
+      audit: expect.arrayContaining([
+        expect.objectContaining({ actor: "integration-test", action: "event.received" }),
+        expect.objectContaining({ id: approvalAudit.id, actor: "safety-reviewer", action: "replay.approval_recorded" }),
+      ]),
     });
     expect(await store.endpointReliability(24)).toMatchObject([{
       total: 1,
