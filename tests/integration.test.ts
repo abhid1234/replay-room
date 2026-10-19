@@ -215,7 +215,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
           `SELECT 1 FROM pg_stat_activity
            WHERE pid <> pg_backend_pid()
              AND datname = current_database()
-             AND wait_event_type = 'Lock'
+             AND state = 'active'
              AND query LIKE 'SELECT id, status FROM webhook_events%'
            LIMIT 1`,
         );
@@ -285,7 +285,7 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
           `SELECT 1 FROM pg_stat_activity
            WHERE pid <> pg_backend_pid()
              AND datname = current_database()
-             AND wait_event_type = 'Lock'
+             AND state = 'active'
              AND query LIKE 'SELECT id, status FROM webhook_events%'
            LIMIT 1`,
         );
