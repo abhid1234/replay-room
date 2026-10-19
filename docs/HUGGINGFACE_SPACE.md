@@ -17,7 +17,9 @@ The command creates `.artifacts/huggingface-space`, injects the public demo buil
 
 ## Publish
 
-The public Static HTML Space uses the repository id `abhid1234/replay-room`. Upload the contents of `.artifacts/huggingface-space` to the Space root. The generated `README.md` declares `sdk: static` and `app_file: index.html`.
+The public Static HTML Space uses the repository id `abhid1234/replay-room`. The preferred path is the manually dispatched **publish Hugging Face assets** workflow documented in [FIXTURES.md](FIXTURES.md). Its repo-scoped trusted publisher uses GitHub OIDC rather than a stored Hugging Face token, and the dataset and Space can be selected independently.
+
+For a local fallback, upload the contents of `.artifacts/huggingface-space` to the Space root. The generated `README.md` declares `sdk: static` and `app_file: index.html`.
 
 ## Verify
 
