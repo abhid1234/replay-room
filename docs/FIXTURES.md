@@ -23,7 +23,7 @@ hf auth login
 hf repos create abhid1234/replay-room-fixtures --repo-type dataset --public --exist-ok
 hf upload abhid1234/replay-room-fixtures fixtures/huggingface . \
   --repo-type dataset \
-  --commit-message "Publish Replay Room fixture dataset v0.1.2"
+  --commit-message "Publish Replay Room fixture dataset v0.3.0"
 ```
 
 Do not pass a token on the command line or commit one to the repository. After upload, reopen the public dataset, confirm that both `incidents` and `replay_guard` configurations render, and read back the manifest with a fresh download:

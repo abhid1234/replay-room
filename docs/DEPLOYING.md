@@ -54,12 +54,12 @@ Both public ingest and operator routes use Redis-backed distributed limits. `ING
 
 ## Verified public deployment
 
-The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live. Its current public services run exact commit `1748eefa5e6baeca00d612e6ca4cd35446ad1fef`:
+The free Blueprint instance `exs-datkjh7avr4c73du67c0` is live. Its current public services run exact commit `26c4cd648aae0e074767345b8bfa80ce777fa27a`:
 
-- console: <https://replay-room-web.onrender.com>, deploy `dep-db209bss728c73ajmoeg`;
-- API: <https://replay-room-api.onrender.com>, deploy `dep-db209cjncjis73b7ifkg`.
+- console: <https://replay-room-web.onrender.com>, deploy `dep-dbap3gui0phs73a1sea0`;
+- API: <https://replay-room-api.onrender.com>, deploy `dep-dbap3gnbtjjs7381qhl0`.
 
-On 2026-10-05, `npm run smoke:live` passed across the Render API, Render console, and Hugging Face demo. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.2.0` with all eleven required routes, a `replay-room.launch-proof/v1` manifest bound to exact commit `1748eef`, a mounted console, the exact cross-origin policy required by that console, and a credential-free Space bundle with its four proof links.
+On 2026-10-18, `npm run smoke:live` passed across the Render API, Render console, and Hugging Face demo. The readback confirmed healthy Postgres and Key Value dependencies, OpenAPI version `0.3.0` with all twelve required routes, a `replay-room.launch-proof/v1` manifest bound to exact commit `26c4cd648aae0e074767345b8bfa80ce777fa27a`, the `two-person-approval` capability, a mounted console, the exact cross-origin policy required by that console, and a credential-free Space bundle with its four proof links.
 
 ## Production upgrade
 
