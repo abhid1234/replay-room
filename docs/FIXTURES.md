@@ -16,7 +16,16 @@ The `provider-rate-limit` incident includes two synthetic `429` attempts and the
 
 ## Publish to Hugging Face
 
-Authenticate with a write-scoped Hugging Face token, then create or reuse the public dataset and upload the prepared directory as one commit:
+The preferred path is the manually dispatched **publish Hugging Face assets** GitHub workflow. It rebuilds both artifacts, refuses a version that differs from `package.json`, publishes with short-lived OIDC credentials, and anonymously compares the public dataset manifest with the checked-in manifest before succeeding.
+
+One-time setup requires two repo-scoped trusted publishers in Hugging Face. Configure each publisher for GitHub repository `abhid1234/replay-room`, branch `main`, and workflow `publish-huggingface.yml`:
+
+- dataset: `abhid1234/replay-room-fixtures` under **Settings → Trusted Publishers**;
+- Space: `abhid1234/replay-room` under **Settings → Trusted Publishers**.
+
+No `HF_TOKEN` GitHub secret is required. The workflow requests a one-hour credential scoped to the exact Hub repository through `HF_OIDC_RESOURCE`; dataset and Space publication can be selected independently.
+
+For a local fallback, authenticate with a write-scoped Hugging Face token, then create or reuse the public dataset and upload the prepared directory as one commit:
 
 ```bash
 hf auth login

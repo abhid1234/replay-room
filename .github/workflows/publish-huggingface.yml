@@ -1,0 +1,97 @@
+name: publish Hugging Face assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact Replay Room version to publish
+        required: true
+        type: string
+      publish_dataset:
+        description: Publish the deterministic fixture dataset
+        required: true
+        default: true
+        type: boolean
+      publish_space:
+        description: Publish the credential-free outage drill
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: replay-room-hugging-face-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: ${{ inputs.publish_dataset || inputs.publish_space }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: npm ci --ignore-scripts
+      - name: Verify requested version
+        run: node -e "const p=require('./package.json');if(p.version!==process.env.REQUESTED_VERSION)throw new Error('requested version does not match package.json')"
+      - name: Rebuild and verify publishable assets
+        run: |
+          npm run fixtures:check
+          npm run space:build
+      - name: Install pinned Hugging Face CLI
+        run: python -m pip install --disable-pip-version-check huggingface_hub==1.19.0
+      - name: Publish fixture dataset with OIDC
+        if: ${{ inputs.publish_dataset }}
+        env:
+          HF_OIDC_RESOURCE: datasets/abhid1234/replay-room-fixtures
+        run: >-
+          hf upload abhid1234/replay-room-fixtures fixtures/huggingface .
+          --repo-type dataset
+          --commit-message "Publish Replay Room fixtures v$REQUESTED_VERSION from ${GITHUB_SHA::7}"
+      - name: Read back the public dataset manifest anonymously
+        if: ${{ inputs.publish_dataset }}
+        run: |
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              --output /tmp/replay-room-dataset-manifest.json \
+              "https://huggingface.co/datasets/abhid1234/replay-room-fixtures/resolve/main/dataset-manifest.json?revision=$GITHUB_SHA" \
+              && cmp fixtures/huggingface/dataset-manifest.json /tmp/replay-room-dataset-manifest.json; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "public dataset manifest did not converge to the reviewed artifact" >&2
+          exit 1
+      - name: Publish static Space with OIDC
+        if: ${{ inputs.publish_space }}
+        env:
+          HF_OIDC_RESOURCE: spaces/abhid1234/replay-room
+        run: >-
+          hf upload abhid1234/replay-room .artifacts/huggingface-space .
+          --repo-type space
+          --commit-message "Publish Replay Room Space v$REQUESTED_VERSION from ${GITHUB_SHA::7}"
+      - name: Verify public launch surfaces
+        if: ${{ inputs.publish_space }}
+        run: |
+          for attempt in {1..12}; do
+            if npm run smoke:live -- \
+              --api https://replay-room-api.onrender.com \
+              --site https://replay-room-web.onrender.com \
+              --space https://abhid1234-replay-room.static.hf.space; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "public launch surfaces did not converge to the reviewed artifacts" >&2
+          exit 1
