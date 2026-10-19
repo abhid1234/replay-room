@@ -279,27 +279,15 @@ describe.runIf(run)("managed Postgres and Key Value contracts", () => {
           metadata: {},
         },
       });
-      let observedLockWait = false;
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        const waiting = await blocker.query(
-          `SELECT 1 FROM pg_stat_activity
-           WHERE pid <> pg_backend_pid()
-             AND datname = current_database()
-             AND state = 'active'
-             AND query LIKE 'SELECT id, status FROM webhook_events%'
-           LIMIT 1`,
-        );
-        if (waiting.rowCount) {
-          observedLockWait = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
+      const lockState = await Promise.race([
+        transitionPromise.then(() => "resolved" as const),
+        new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 100)),
+      ]);
+      expect(lockState).toBe("blocked");
       const releaseClock = await blocker.query("SELECT clock_timestamp() AS now");
       const releasedAt = new Date(releaseClock.rows[0]!.now as string | Date).getTime();
       await blocker.query("COMMIT");
       const transition = await transitionPromise;
-      expect(observedLockWait).toBe(true);
       if (!transition.scheduled) throw new Error("Expected a scheduled retry");
       expect(Date.parse(transition.intent.availableAt)).toBeGreaterThanOrEqual(releasedAt + backoffMs);
     } finally {

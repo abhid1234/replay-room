@@ -4,6 +4,8 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+## 0.3.0 - 2026-10-18
+
 ### Added
 
 - high-risk replay dual control with 30-minute approvals bound to the exact rehearsal, payload digest, and destination;
