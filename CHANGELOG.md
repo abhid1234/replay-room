@@ -4,6 +4,12 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+### Changed
+
+- collapsed the operator console's five-request polling cycle into one versioned dashboard snapshot while retaining concurrent Postgres and Key Value reads;
+- ran queue health and database/outbox health concurrently for lower system-snapshot latency;
+- patched direct and transitive runtime dependencies flagged by the npm security audit.
+
 ## 0.3.0 - 2026-10-18
 
 ### Added

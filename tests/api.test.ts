@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/api/app.js";
 import type { AppConfig } from "../src/config.js";
 import type { DeliveryJob, DeliveryQueue } from "../src/domain/contracts.js";
@@ -84,7 +84,7 @@ describe("webhook API", () => {
     expect(response.json()).toMatchObject({
       openapi: "3.1.0",
       info: { title: "Replay Room API", version: "0.3.0" },
-      paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay/approval": {}, "/api/events/{eventId}/replay": {} },
+      paths: { "/.well-known/replay-room": {}, "/ingest/{ingestKey}": {}, "/api/dashboard": {}, "/api/events/{eventId}/replay/preflight": {}, "/api/events/{eventId}/replay/approval": {}, "/api/events/{eventId}/replay": {} },
       components: { securitySchemes: { bearerAuth: { scheme: "bearer" } } },
     });
   });
@@ -131,6 +131,47 @@ describe("webhook API", () => {
     expect(response.headers["access-control-allow-origin"]).toBe(config.WEB_ORIGIN);
     expect(response.headers["access-control-allow-methods"]).toContain("GET");
     expect(response.headers["access-control-allow-headers"]).toContain("authorization");
+  });
+
+  it("loads the complete dashboard through one authenticated snapshot request", async () => {
+    const store = new FakeStore();
+    store.endpoint.signingSecret = "webhook-secret-that-must-stay-server-side";
+    const queue = new FakeQueue();
+    const stats = vi.spyOn(store, "stats");
+    const events = vi.spyOn(store, "listEvents");
+    const endpoints = vi.spyOn(store, "listEndpoints");
+    const reliability = vi.spyOn(store, "endpointReliability");
+    const ping = vi.spyOn(store, "ping");
+    const outbox = vi.spyOn(store, "deliveryIntentStats");
+    const queueHealth = vi.spyOn(queue, "health");
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/dashboard?limit=100&windowHours=24",
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toMatchObject({
+      stats: { total: 0 },
+      events: [],
+      endpoints: [{ id: store.endpoint.id, signingSecretConfigured: true }],
+      reliability: [{ endpointId: store.endpoint.id, windowHours: 24 }],
+      system: { components: { database: { state: "online" }, queue: { state: "online" } } },
+    });
+    expect(response.json().endpoints[0]).not.toHaveProperty("signingSecret");
+    expect(stats).toHaveBeenCalledOnce();
+    expect(events).toHaveBeenCalledOnce();
+    expect(events).toHaveBeenCalledWith(100);
+    expect(endpoints).toHaveBeenCalledOnce();
+    expect(reliability).toHaveBeenCalledOnce();
+    expect(reliability).toHaveBeenCalledWith(24);
+    expect(ping).toHaveBeenCalledOnce();
+    expect(outbox).toHaveBeenCalledOnce();
+    expect(queueHealth).toHaveBeenCalledOnce();
   });
 
   it("accepts once, persists before enqueue, and deduplicates retries", async () => {

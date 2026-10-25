@@ -53,6 +53,11 @@ const replayPreflightSchema = replaySchema.extend({
   reason: z.string().trim().max(500).default(""),
 });
 
+const dashboardQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  windowHours: z.coerce.number().int().min(1).max(168).default(24),
+});
+
 const REPLAY_APPROVAL_TTL_MS = 30 * 60 * 1_000;
 
 export async function buildApp({ config, store, queue }: Dependencies): Promise<FastifyInstance> {
@@ -155,35 +160,23 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
   });
 
   app.get("/api/stats", { preHandler: adminGuard(config) }, async () => store.stats());
-  app.get("/api/system", { preHandler: adminGuard(config) }, async () => {
-    const databaseStartedAt = Date.now();
-    const now = Date.now();
-    const [, intentOutbox] = await Promise.all([store.ping(), store.deliveryIntentStats()]);
-    const databaseLatencyMs = Date.now() - databaseStartedAt;
-    const queueHealth = await queue.health();
+  app.get("/api/system", { preHandler: adminGuard(config) }, async () => systemSnapshot({ config, store, queue }));
+  app.get("/api/dashboard", { preHandler: adminGuard(config) }, async (request, reply) => {
+    const query = dashboardQuerySchema.parse(request.query);
+    const [stats, events, endpoints, reliability, system] = await Promise.all([
+      store.stats(),
+      store.listEvents(query.limit),
+      store.listEndpoints(),
+      store.endpointReliability(query.windowHours),
+      systemSnapshot({ config, store, queue }),
+    ]);
+    reply.header("cache-control", "no-store");
     return {
-      observedAt: new Date(now).toISOString(),
-      deploy: {
-        service: process.env.RENDER_SERVICE_NAME ?? "replay-room-api",
-        commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
-        instance: process.env.RENDER_INSTANCE_ID ?? "local",
-        environment: config.NODE_ENV,
-        topology: config.EMBEDDED_WORKER ? "embedded-free" : "split-services",
-      },
-      components: {
-        api: { state: "online", uptimeSeconds: Math.round(process.uptime()) },
-        database: { state: "online", latencyMs: databaseLatencyMs },
-        outbox: { state: intentOutbox.stale > 0 ? "degraded" : "online", ...intentOutbox },
-        queue: { state: "online", latencyMs: queueHealth.latencyMs, jobs: queueHealth.jobs },
-        worker: {
-          state: heartbeatState(queueHealth.workerHeartbeat, 45_000, now),
-          heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.workerHeartbeat, now),
-        },
-        cron: {
-          state: heartbeatState(queueHealth.cronHeartbeat, 15 * 60_000, now),
-          heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.cronHeartbeat, now),
-        },
-      },
+      stats,
+      events,
+      endpoints: endpoints.map(endpointView),
+      reliability,
+      system,
     };
   });
   app.get("/api/endpoints", { preHandler: adminGuard(config) }, async () => {
@@ -497,4 +490,41 @@ function stringHeader(value: unknown): string | null {
 function endpointView(endpoint: Endpoint) {
   const { signingSecret, ...safe } = endpoint;
   return { ...safe, signingSecretConfigured: Boolean(signingSecret) };
+}
+
+async function systemSnapshot({ config, store, queue }: Dependencies) {
+  const now = Date.now();
+  const database = (async () => {
+    const startedAt = Date.now();
+    const [, intentOutbox] = await Promise.all([store.ping(), store.deliveryIntentStats()]);
+    return { latencyMs: Date.now() - startedAt, intentOutbox };
+  })();
+  const [{ latencyMs: databaseLatencyMs, intentOutbox }, queueHealth] = await Promise.all([
+    database,
+    queue.health(),
+  ]);
+  return {
+    observedAt: new Date(now).toISOString(),
+    deploy: {
+      service: process.env.RENDER_SERVICE_NAME ?? "replay-room-api",
+      commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "development",
+      instance: process.env.RENDER_INSTANCE_ID ?? "local",
+      environment: config.NODE_ENV,
+      topology: config.EMBEDDED_WORKER ? "embedded-free" : "split-services",
+    },
+    components: {
+      api: { state: "online", uptimeSeconds: Math.round(process.uptime()) },
+      database: { state: "online", latencyMs: databaseLatencyMs },
+      outbox: { state: intentOutbox.stale > 0 ? "degraded" : "online", ...intentOutbox },
+      queue: { state: "online", latencyMs: queueHealth.latencyMs, jobs: queueHealth.jobs },
+      worker: {
+        state: heartbeatState(queueHealth.workerHeartbeat, 45_000, now),
+        heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.workerHeartbeat, now),
+      },
+      cron: {
+        state: heartbeatState(queueHealth.cronHeartbeat, 15 * 60_000, now),
+        heartbeatAgeSeconds: heartbeatAgeSeconds(queueHealth.cronHeartbeat, now),
+      },
+    },
+  };
 }
