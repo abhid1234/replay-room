@@ -38,7 +38,7 @@ For live events, the API computes a deterministic diagnosis from the current sta
 
 The authenticated console also reads a live runtime snapshot instead of presenting a decorative architecture diagram. Postgres and Key Value latency come from direct dependency checks, BullMQ reports waiting/active/delayed/failed job counts, the durable outbox exposes pending/dispatched/processing/stale intent pressure, and the background worker and cron reconciler publish expiring heartbeats. On Render, the panel includes the service, instance, and Git commit injected into the running API.
 
-The console refreshes counters, recent events, endpoints, reliability, and runtime health through one dashboard snapshot request. The API still executes the independent Postgres and Key Value reads concurrently, reducing browser round trips and operator rate-limit consumption without serializing the underlying work.
+The console refreshes counters, recent events, endpoints, reliability, and runtime health through one dashboard snapshot request. The API still executes the independent Postgres and Key Value reads concurrently, reducing browser round trips and operator rate-limit consumption without serializing the underlying work. Polling waits for each refresh to finish, pauses in hidden tabs, resumes immediately when the operator returns, and exponentially backs off transient failures to avoid overlapping or wasteful requests.
 
 The operator token is session-scoped by default and is removed by **Disconnect**. Persisting it across browser restarts requires an explicit opt-in; tokens saved by older releases are automatically downgraded to session storage on first load.
 
