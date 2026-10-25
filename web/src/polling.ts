@@ -1,4 +1,4 @@
-export type PollResult = "ok" | "unauthorized" | "retryable";
+export type PollResult = "ok" | "unauthorized" | "retryable" | "cancelled";
 
 type Refresh = (silent: boolean) => Promise<PollResult>;
 type TimerHandle = unknown;
@@ -64,7 +64,7 @@ export function startAuthorizedPolling(refresh: Refresh, options: PollingOptions
     const result = await refresh(silent).catch(() => "retryable" as const);
     inFlight = false;
     if (stopped) return;
-    if (result === "unauthorized") {
+    if (result === "unauthorized" || result === "cancelled") {
       stop();
       return;
     }

@@ -39,8 +39,8 @@ function pollingHarness() {
 // Regression: ISSUE-001 — an invalid admin token kept polling protected endpoints every five seconds.
 // Found by /qa on 2026-09-29.
 describe("authenticated console polling", () => {
-  it("does not schedule another request after the initial request is unauthorized", async () => {
-    const refresh = vi.fn(async () => "unauthorized" as PollResult);
+  it.each(["unauthorized", "cancelled"] satisfies PollResult[])("does not schedule another request after the initial request is %s", async (result) => {
+    const refresh = vi.fn(async () => result);
     const harness = pollingHarness();
 
     const stop = startAuthorizedPolling(refresh, harness.options);

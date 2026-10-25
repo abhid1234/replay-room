@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { IncidentDrill } from "./IncidentDrill";
 import { buildIngestRecipe } from "./ingest-recipe";
 import { startAuthorizedPolling, type PollResult } from "./polling";
+import { OperatorRequestSession, RequestSessionCancelledError } from "./request-session";
 import { clearOperatorCredential, loadOperatorCredential, saveOperatorCredential } from "./token-storage";
 
 type EventStatus = "queued" | "delivering" | "retrying" | "delivered" | "dead_letter";
@@ -152,17 +153,26 @@ function ConsoleApp() {
   const [selected, setSelected] = useState<Detail | null>(null);
   const [message, setMessage] = useState("Enter the Render-generated admin token to open the console.");
   const [busy, setBusy] = useState(false);
+  const [requestSession] = useState(() => new OperatorRequestSession());
 
   const auth = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
-    const response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      headers: { "content-type": "application/json", ...auth, ...(init.headers || {}) },
+    return requestSession.run(async (signal) => {
+      const response = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        signal,
+        headers: { "content-type": "application/json", ...auth, ...(init.headers || {}) },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new ApiRequestError(body.error || `HTTP ${response.status}`, response.status);
+      return body as T;
     });
-    const body = await response.json();
-    if (!response.ok) throw new ApiRequestError(body.error || `HTTP ${response.status}`, response.status);
-    return body as T;
-  }, [auth]);
+  }, [auth, requestSession]);
+
+  const reportRequestError = useCallback((error: unknown, fallback: string) => {
+    if (error instanceof RequestSessionCancelledError) return;
+    setMessage(error instanceof Error ? error.message : fallback);
+  }, []);
 
   const refresh = useCallback(async (silent = false): Promise<PollResult> => {
     if (!token) return "unauthorized";
@@ -174,22 +184,28 @@ function ConsoleApp() {
       setMessage(`Connected to ${API_BASE}`);
       return "ok";
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load Replay Room");
+      if (error instanceof RequestSessionCancelledError) return "cancelled";
+      reportRequestError(error, "Could not load Replay Room");
       return error instanceof ApiRequestError && error.status === 401 ? "unauthorized" : "retryable";
     } finally { if (!silent) setBusy(false); }
-  }, [rememberToken, request, token]);
+  }, [rememberToken, reportRequestError, request, token]);
 
   useEffect(() => {
     if (!token) return;
-    return startAuthorizedPolling(refresh);
-  }, [refresh, token]);
+    const stop = startAuthorizedPolling(refresh);
+    return () => {
+      stop();
+      requestSession.invalidate();
+    };
+  }, [refresh, requestSession, token]);
 
   const openEvent = async (id: string) => {
     try { setSelected(await request<Detail>(`/api/events/${id}`)); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Could not open event"); }
+    catch (error) { reportRequestError(error, "Could not open event"); }
   };
 
   const disconnect = () => {
+    requestSession.invalidate();
     clearOperatorCredential(localStorage, sessionStorage);
     setToken("");
     setRememberToken(false);
@@ -232,25 +248,37 @@ function ConsoleApp() {
   };
 
   const rehearse = async (event: Detail, destinationUrl: string, operator: string) => {
-    await request(`/api/events/${event.id}/rehearse`, {
-      method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, notes: "Dashboard rehearsal before operator replay" }),
-    });
-    setMessage("Rehearsal queued. Refresh in a moment to inspect the result.");
+    try {
+      await request(`/api/events/${event.id}/rehearse`, {
+        method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, notes: "Dashboard rehearsal before operator replay" }),
+      });
+      setMessage("Rehearsal queued. Refresh in a moment to inspect the result.");
+    } catch (error) {
+      reportRequestError(error, "Could not queue rehearsal");
+    }
   };
 
   const recordReplayApproval = async (event: Detail, destinationUrl: string, reason: string, acknowledgeRisk: boolean, operator: string) => {
-    const approval = await request<ReplayApproval>(`/api/events/${event.id}/replay/approval`, {
-      method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
-    });
-    setMessage(`${approval.actor} approved this high-risk replay until ${new Date(approval.expiresAt).toLocaleTimeString()}. A different operator must execute it.`);
-    await openEvent(event.id);
+    try {
+      const approval = await request<ReplayApproval>(`/api/events/${event.id}/replay/approval`, {
+        method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
+      });
+      setMessage(`${approval.actor} approved this high-risk replay until ${new Date(approval.expiresAt).toLocaleTimeString()}. A different operator must execute it.`);
+      await openEvent(event.id);
+    } catch (error) {
+      reportRequestError(error, "Could not record replay approval");
+    }
   };
 
   const replay = async (event: Detail, destinationUrl: string, reason: string, acknowledgeRisk: boolean, operator: string) => {
-    const receipt = await request<{ duplicate?: boolean }>(`/api/events/${event.id}/replay`, {
-      method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
-    });
-    setMessage(receipt.duplicate ? "That replay intent already exists; no duplicate delivery was queued." : "Guard approved the replay and queued it for delivery.");
+    try {
+      const receipt = await request<{ duplicate?: boolean }>(`/api/events/${event.id}/replay`, {
+        method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, reason, acknowledgeRisk }),
+      });
+      setMessage(receipt.duplicate ? "That replay intent already exists; no duplicate delivery was queued." : "Guard approved the replay and queued it for delivery.");
+    } catch (error) {
+      reportRequestError(error, "Could not queue replay");
+    }
   };
 
   const preflightReplay = async (event: Detail, destinationUrl: string, reason: string, acknowledgeRisk: boolean, operator: string): Promise<ReplayPreflight | null> => {
@@ -261,18 +289,21 @@ function ConsoleApp() {
       setMessage(decision.allowed ? "Replay preflight passed. No state was changed." : `Replay preflight found ${decision.reasons.length} blocker${decision.reasons.length === 1 ? "" : "s"}.`);
       return decision;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not run replay preflight");
+      reportRequestError(error, "Could not run replay preflight");
       return null;
     }
   };
 
   const downloadEvidence = async (event: Detail) => {
-    const response = await fetch(`${API_BASE}/api/events/${event.id}/evidence`, { headers: auth });
-    if (!response.ok) {
-      const body = await response.json();
-      throw new Error(body.error || `HTTP ${response.status}`);
-    }
-    const url = URL.createObjectURL(await response.blob());
+    const blob = await requestSession.run(async (signal) => {
+      const response = await fetch(`${API_BASE}/api/events/${event.id}/evidence`, { headers: auth, signal });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.error || `HTTP ${response.status}`);
+      }
+      return response.blob();
+    });
+    const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `replay-room-${event.id}.evidence.json`;
@@ -341,14 +372,14 @@ function ConsoleApp() {
 
         <article className="panel detail-panel">
           <div className="panel-title"><span>Replay inspector</span><span className="mono">{selected?.id.slice(0, 12) ?? "NO EVENT"}</span></div>
-          {selected ? <EventInspector key={selected.id} event={selected} onRehearse={rehearse} onRecordApproval={recordReplayApproval} onPreflight={preflightReplay} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => setMessage(error instanceof Error ? error.message : "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
+          {selected ? <EventInspector key={selected.id} event={selected} onRehearse={rehearse} onRecordApproval={recordReplayApproval} onPreflight={preflightReplay} onReplay={replay} onDownload={(event) => downloadEvidence(event).catch((error) => reportRequestError(error, "Could not download evidence"))} /> : <div className="empty tall">Select an event to see payload, attempts, rehearsal evidence, and audit history.</div>}
         </article>
       </section>
 
       <section className="bottom-grid">
         <article className="panel">
           <div className="panel-title">Create endpoint</div>
-          <form className="endpoint-form" onSubmit={(event) => { event.preventDefault(); void createEndpoint(event.currentTarget).catch((error) => setMessage(error.message)); }}>
+          <form className="endpoint-form" onSubmit={(event) => { event.preventDefault(); void createEndpoint(event.currentTarget).catch((error) => reportRequestError(error, "Could not create endpoint")); }}>
             <label><span>Name</span><input name="name" required minLength={2} placeholder="Billing events" /></label>
             <label><span>Receiver URL</span><input name="destinationUrl" required type="url" placeholder="https://your-app.com/webhooks" /></label>
             <label><span>Signature profile</span><select name="signatureProfile" defaultValue="none"><option value="none">Unsigned</option><option value="generic">Replay Room HMAC</option><option value="github">GitHub</option><option value="stripe">Stripe</option></select></label>

@@ -40,7 +40,7 @@ The authenticated console also reads a live runtime snapshot instead of presenti
 
 The console refreshes counters, recent events, endpoints, reliability, and runtime health through one dashboard snapshot request. The API still executes the independent Postgres and Key Value reads concurrently, reducing browser round trips and operator rate-limit consumption without serializing the underlying work. Polling waits for each refresh to finish, pauses in hidden tabs, resumes immediately when the operator returns, and exponentially backs off transient failures to avoid overlapping or wasteful requests.
 
-The operator token is session-scoped by default and is removed by **Disconnect**. Persisting it across browser restarts requires an explicit opt-in; tokens saved by older releases are automatically downgraded to session storage on first load.
+The operator token is session-scoped by default and is removed by **Disconnect**. Disconnecting or changing the credential also aborts every in-flight operator request, and late responses are rejected before they can restore credentials or repopulate incident state. Persisting the token across browser restarts requires an explicit opt-in; tokens saved by older releases are automatically downgraded to session storage on first load.
 
 Every configured endpoint appears in the **Ingest workbench** with a copy-ready, idempotent cURL recipe. Unsigned endpoints produce an executable request; signed profiles name the exact provider header that must be computed without ever returning the signing secret to the browser.
 
