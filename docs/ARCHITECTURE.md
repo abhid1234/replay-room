@@ -89,6 +89,8 @@ In the free lab topology, the API process embeds both the queue worker and recon
 
 The operator console polls `GET /api/dashboard`, which combines counters, recent events, endpoint configuration, reliability, and this system snapshot into one authenticated response. Independent database and queue reads remain concurrent on the server. Compared with polling five routes, this uses one HTTP request and one operator rate-limit unit per refresh while preserving the same underlying observations. The client schedules the next poll only after the current one finishes, suspends timers while the tab is hidden, refreshes immediately on return, and backs transient failures off from 10 to 60 seconds.
 
+Every operator request belongs to the current browser credential generation. Disconnecting, changing the token, or unmounting the console invalidates that generation and aborts its active fetches; even a transport that resolves late cannot commit a stale result into the new session.
+
 Heartbeats are deliberately operational hints, not health-check dependencies. API readiness requires Postgres and Key Value, while a missing worker or reconciler heartbeat is exposed as `waiting` or `degraded` for an operator to investigate.
 
 ## Endpoint reliability
