@@ -38,6 +38,8 @@ For live events, the API computes a deterministic diagnosis from the current sta
 
 The authenticated console also reads a live runtime snapshot instead of presenting a decorative architecture diagram. Postgres and Key Value latency come from direct dependency checks, BullMQ reports waiting/active/delayed/failed job counts, the durable outbox exposes pending/dispatched/processing/stale intent pressure, and the background worker and cron reconciler publish expiring heartbeats. On Render, the panel includes the service, instance, and Git commit injected into the running API.
 
+The console refreshes counters, recent events, endpoints, reliability, and runtime health through one dashboard snapshot request. The API still executes the independent Postgres and Key Value reads concurrently, reducing browser round trips and operator rate-limit consumption without serializing the underlying work.
+
 The operator token is session-scoped by default and is removed by **Disconnect**. Persisting it across browser restarts requires an explicit opt-in; tokens saved by older releases are automatically downgraded to session storage on first load.
 
 Every configured endpoint appears in the **Ingest workbench** with a copy-ready, idempotent cURL recipe. Unsigned endpoints produce an executable request; signed profiles name the exact provider header that must be computed without ever returning the signing secret to the browser.
@@ -145,6 +147,7 @@ curl -X POST http://localhost:4000/ingest/YOUR_INGEST_KEY \
 | `POST` | `/ingest/:ingestKey` | Accept and deduplicate an event |
 | `GET` | `/api/stats` | Dashboard status counts |
 | `GET` | `/api/system` | Dependency latency, queue pressure, service heartbeats, and deploy identity |
+| `GET` | `/api/dashboard` | Complete operator snapshot in one request |
 | `GET/POST` | `/api/endpoints` | List or create ingest endpoints |
 | `GET` | `/api/endpoints/reliability` | Per-destination volume, delivery rate, recovery state, and p95 latency |
 | `GET` | `/api/events` | List recent events |

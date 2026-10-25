@@ -43,6 +43,13 @@ type SystemSnapshot = {
     cron: { state: ComponentState; heartbeatAgeSeconds: number | null };
   };
 };
+type DashboardSnapshot = {
+  stats: Stats;
+  events: Event[];
+  endpoints: Endpoint[];
+  reliability: EndpointReliability[];
+  system: SystemSnapshot;
+};
 type Detail = Event & {
   endpoint: Endpoint;
   attempts: Array<{ id: string; mode: string; statusCode: number | null; error: string | null; durationMs: number; createdAt: string }>;
@@ -161,10 +168,8 @@ function ConsoleApp() {
     if (!token) return "unauthorized";
     if (!silent) setBusy(true);
     try {
-      const [nextStats, nextEvents, nextEndpoints, nextReliability, nextSystem] = await Promise.all([
-        request<Stats>("/api/stats"), request<Event[]>("/api/events?limit=100"), request<Endpoint[]>("/api/endpoints"), request<EndpointReliability[]>("/api/endpoints/reliability?windowHours=24"), request<SystemSnapshot>("/api/system"),
-      ]);
-      setStats(nextStats); setEvents(nextEvents); setEndpoints(nextEndpoints); setReliability(nextReliability); setSystem(nextSystem);
+      const snapshot = await request<DashboardSnapshot>("/api/dashboard?limit=100&windowHours=24");
+      setStats(snapshot.stats); setEvents(snapshot.events); setEndpoints(snapshot.endpoints); setReliability(snapshot.reliability); setSystem(snapshot.system);
       saveOperatorCredential(token, rememberToken, localStorage, sessionStorage);
       setMessage(`Connected to ${API_BASE}`);
       return "ok";

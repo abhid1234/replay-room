@@ -154,6 +154,7 @@ async function verifySpace(config, dependencies) {
   for (const forbidden of [
     'replay-room-token',
     'Render-generated admin token',
+    '/api/dashboard',
     '/api/stats',
     '/api/events',
     'Authorization: Bearer',

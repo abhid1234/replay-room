@@ -67,6 +67,15 @@ export const openApiDocument = {
     },
     "/api/stats": { get: operatorGet("Read global event counters", "getStats", "DashboardStats") },
     "/api/system": { get: operatorGet("Read live dependency, queue, heartbeat, and deploy state", "getSystem", "SystemSnapshot") },
+    "/api/dashboard": {
+      get: {
+        ...operatorGet("Read the complete operator dashboard in one request", "getDashboard", "DashboardSnapshot"),
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200, default: 100 } },
+          { name: "windowHours", in: "query", schema: { type: "integer", minimum: 1, maximum: 168, default: 24 } },
+        ],
+      },
+    },
     "/api/endpoints": {
       get: operatorGet("List webhook endpoints", "listEndpoints", "EndpointList"),
       post: {
@@ -151,6 +160,13 @@ export const openApiDocument = {
       }),
       SystemSnapshot: { type: "object" },
       EndpointReliabilityList: { type: "array", items: { type: "object" } },
+      DashboardSnapshot: object(["stats", "events", "endpoints", "reliability", "system"], {
+        stats: { $ref: "#/components/schemas/DashboardStats" },
+        events: { $ref: "#/components/schemas/EventList" },
+        endpoints: { $ref: "#/components/schemas/EndpointList" },
+        reliability: { $ref: "#/components/schemas/EndpointReliabilityList" },
+        system: { $ref: "#/components/schemas/SystemSnapshot" },
+      }),
       RehearsalRequest: object(["destinationUrl"], { destinationUrl: uri, notes: { type: "string", maxLength: 500 } }),
       ReplayRequest: object(["destinationUrl", "reason"], {
         destinationUrl: uri,
