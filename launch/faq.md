@@ -1,0 +1,107 @@
+# FAQ
+
+Answers for launch-day comments, interviews, and the press kit. Each answer is grounded in the repository; links point to the source of truth. Rewrite answers in your own voice when replying publicly.
+
+## Product
+
+### 1. What is Replay Room, in one sentence?
+
+Replay Room turns a failed webhook from a blind resend into a rehearsed, evidence-backed production change. It records the original event and every delivery attempt, diagnoses the failure, rehearses the recovery against a controlled destination, checks nine conditions, requires a second operator for high-risk replays, and exports signed incident evidence.
+
+### 2. Does Replay Room provide exactly-once delivery?
+
+No. Delivery is at-least-once. A Postgres intent claim stops two workers from executing the same queue job, but nothing can remove the classic ambiguity where a receiver accepts a request and the worker crashes, or the connection breaks, before the response is recorded. Replay Room makes that ambiguity visible and gates the replay on it. See [Delivery semantics](../docs/ARCHITECTURE.md#delivery-semantics).
+
+### 3. If receivers used idempotency keys, would you still need this?
+
+Receivers should use idempotency keys, and Replay Room rewards them: a stable key plus clean 4xx rejections is rated low risk, and ingest deduplicates on the key. The console exists for everything else: receivers without keys, keys that were not sent, and failures where nobody knows what the receiver did. Even with keys, the rehearsal and audit trail answer "who replayed what, to where, and why" after the incident.
+
+### 4. What does "receiver ambiguity" mean, and how is it detected?
+
+It means the sender cannot tell whether the receiver already acted. Replay Room rates duplicate-side-effect risk from the attempt transcript. Missing idempotency evidence, an attempt that received no HTTP response, or a prior 2xx response is high risk. Multiple attempts, throttling, and 5xx responses are elevated. A stable idempotency key with only permanent 4xx rejections is low. The rules are deterministic and covered by six replay-risk conformance cases. See [Duplicate-side-effect risk](../docs/ARCHITECTURE.md#duplicate-side-effect-risk).
+
+### 5. What exactly is a rehearsal?
+
+The worker sends the original payload, with an `x-replay-room-mode: rehearsal` header, to a destination the operator chooses. The result is recorded with the event ID, the payload's SHA-256 digest, the exact destination URL, and the response status. A production replay is allowed only to the same destination, with the same payload digest. Changing either one forces a new rehearsal, and the newest rehearsal is authoritative. A passing rehearsal proves only that one endpoint accepted one bound payload; it does not prove downstream side effects are safe.
+
+### 6. What are the nine replay conditions?
+
+Operator reason (at least ten characters), operator identity, a rehearsal exists, the latest rehearsal passed, the payload digest matches the rehearsal, the destination matches the rehearsal, the event is in dead-letter state, duplicate-side-effect risk has been acknowledged when required, and two-person approval is satisfied when required. `POST /api/events/:id/replay/preflight` returns the full trace without changing state. The replay endpoint re-evaluates the same guard on the server.
+
+### 7. How does two-person approval work?
+
+For a high-risk event, one operator records an approval through `POST /api/events/:id/replay/approval`. The approval expires after 30 minutes and is bound to the current rehearsal, payload digest, and destination. A different operator must then run preflight and execute the replay. The ninth condition fails if the approval is missing, expired, bound to an older rehearsal, mismatched on payload or destination, or if the approver tries to execute it. Low- and elevated-risk events keep the single-operator path.
+
+### 8. Are the two operators authenticated individually?
+
+Not yet. The console uses one admin bearer token per deployment, and operator identity is a declared name sent with each action. Two-person approval therefore enforces two distinct identities, not two authenticated people. Organization-scoped authentication is the first item on the production list. Say this plainly whenever dual control comes up.
+
+### 9. Is there AI in Replay Room?
+
+No. The diagnosis, risk rating, and replay guard are deterministic rules over durable state and the attempt transcript, covered by tests and conformance fixtures. No model, external service, or hidden prompt decides whether production traffic can be replayed.
+
+## Security
+
+### 10. How are secrets handled?
+
+Sensitive request headers and provider signature headers are redacted before storage. Endpoint signing secrets stay on the server and never appear in API responses or evidence exports; the API reports only whether a secret is configured. The admin token and evidence-signing key are generated by the Render Blueprint and should never appear in Git, logs, fixtures, or screenshots. Stored payloads and endpoint secrets are not yet encrypted at rest, which is on the production list.
+
+### 11. How does Replay Room protect against SSRF?
+
+Endpoint creation rejects private IP literals, local hostnames, URL credentials, and non-HTTP schemes. Before every delivery, rehearsal, or replay, the worker resolves the hostname and rejects the whole answer set if any address is loopback, private, carrier-grade NAT, link-local, multicast, reserved, or malformed. The socket is pinned to the validated addresses, redirects are never followed, connections are never reused across validations, and one deadline covers DNS and HTTP. A production deployment should still add an external egress allowlist. See [Outbound network boundary](../docs/ARCHITECTURE.md#outbound-network-boundary).
+
+### 12. Which webhook signatures are verified?
+
+A generic Replay Room HMAC profile (`x-replay-signature`), GitHub (`x-hub-signature-256`), and Stripe's timestamp-bound `v1` signature with a five-minute default tolerance. Verification runs on the raw request bytes. Unsigned endpoints are also supported.
+
+### 13. What does the signed evidence bundle prove?
+
+It proves the bundle still matches what this deployment exported. The server canonicalizes the event identity, diagnosis, risk, attempts, rehearsals, and audit history, records a SHA-256 digest, and seals the bytes with HMAC-SHA256 under a deployment-held evidence key. Anyone with that key can verify a bundle offline; anyone can inspect its contents. It is not a public timestamp, a public-key signature, or a third-party attestation.
+
+## Architecture and Render
+
+### 14. What happens if Redis (Render Key Value) is lost?
+
+Work is not lost. Before a job reaches Key Value, Replay Room commits the exact delivery intent to Postgres with a stable job key, retry ordinal, target, actor, and reason. A reconciler runs every ten minutes, re-dispatches pending or stale intents with the same job key, and synthesizes a job only for an orphaned event with no open intent. Duplicate queue messages are harmless because the worker must claim the intent atomically in Postgres first.
+
+### 15. Why is Postgres the authority instead of the queue?
+
+Because the queue is transport, not memory. Postgres holds events, delivery intents, attempts, rehearsals, approvals, and the append-only audit log; the free Key Value instance is in-memory and can lose data on restart. Making Postgres authoritative turns queue loss into a recovery step and keeps the evidence chain in one durable place.
+
+### 16. What does the free Render topology give up?
+
+A free web service spins down after about 15 minutes without traffic and can take around a minute to wake. Free Postgres is limited to 1 GB, has no backups, and expires after 30 days. Free Key Value is in-memory and loses data on restart. Free compute has no background-worker or cron plan, so the API process embeds the worker and reconciler. The dashboard reports this as the `embedded-free` topology instead of pretending the loops are separate services. See [docs/DEPLOYING.md](../docs/DEPLOYING.md).
+
+### 17. Is the public deployment production-ready?
+
+No. It is an evaluation deployment on free plans with one shared admin token. Production hardening means separate API, worker, and cron services, paid Postgres with backups, persistent Key Value, organization-scoped authentication, encryption for stored payloads and secrets, an external egress allowlist, and tenant-configurable retention.
+
+### 18. Why Render?
+
+Each part of the design maps to a Render primitive: a static site for the console, a web service for ingest and the admin API, Postgres for the ledger, and Key Value for queue transport, all declared in one `render.yaml` Blueprint. The free plans also impose real failure modes (spin-down, in-memory queue, expiring database), which made them a useful test of the recovery design.
+
+## Surfaces
+
+### 19. What is real and what is simulated?
+
+The outage drill on the landing page and on Hugging Face is a labeled simulation: it uses the real lifecycle vocabulary but no live events. The operator console behind it is real. It runs against the live Render API, Postgres, and Key Value, and it needs the deployment's admin token. The public `/health`, `/openapi.json`, and `/.well-known/replay-room` endpoints are live readouts.
+
+### 20. What is the npm package for?
+
+`@avee1234/replay-room` packages the portable parts: the `replay-room.evidence/v1` schema and TypeScript types, the evidence verifier CLI (`inspect` and `verify`), the synthetic fixtures, and the `doctor` command that checks a deployment's API, console, CORS policy, and demo boundary. It is not the server.
+
+As of 2026-10-26 the package is not on npm: `npm view @avee1234/replay-room` returned `E404`. The exact tarball is attached to each GitHub release with a CycloneDX SBOM and provenance attestations. Once the registry readback passes, replace the next line with the npm line from [link-map.md](link-map.md); otherwise delete it.
+
+[[NPM_LINE]]
+
+### 21. What is on Hugging Face?
+
+Two things. The Space is a static, credential-free copy of the outage drill; it never asks for or stores an admin token. The dataset is the synthetic incident and replay-guard corpus used by the conformance tests, with a manifest of byte lengths and SHA-256 digests. Neither is a second backend; Render remains the system of record.
+
+### 22. Can I run it myself?
+
+Yes. Locally: `docker compose up -d`, `npm install`, `npm run db:migrate`, then `npm run dev`, `npm run dev:worker`, and `npm run dev:web`; local development includes test sinks that accept, retry, or reject. On Render: create a Blueprint from `render.yaml`, set `WEB_ORIGIN` and `VITE_API_BASE`, and confirm every plan says Free. See [docs/DEPLOYING.md](../docs/DEPLOYING.md).
+
+### 23. Does it have users?
+
+Not yet. It is an early open-source project with no production users. It is published to get feedback from people who operate webhooks.
