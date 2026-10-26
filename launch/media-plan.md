@@ -22,7 +22,7 @@ No product screenshots exist in this kit. Capture them after the release train i
 | `diagrams/replay-room-render-architecture.png` | 1950×592 | Substack, Show HN replies, press kit, the 8-minute demo | Replay Room architecture. A webhook provider posts to a Render web service that runs the API, worker, and reconciler. The web service commits to a Postgres durable ledger first, then enqueues to Key Value. An incident operator uses a React console on a Render static site. The worker delivers or rehearses to the customer receiver. Postgres exports signed evidence that a CLI verifies offline. A production upgrade splits the API, background worker, and cron reconciler over backed-up Postgres and persistent Key Value. |
 | `diagrams/replay-room-render-architecture.svg` | Vector | Embedding where SVG is supported | Same as the PNG. |
 | `launch/assets/social-banner-1100x220.png` | 1100×220 | Substack header, newsletter banner, profile featured section | Replay Room banner: "Rehearse a failed webhook before you replay it." beside four steps: dead letter, rehearse, guard with nine conditions, and replay through a durable intent. |
-| `launch/assets/og-image-1200x630.png` | 1200×630 | Link previews, Product Hunt gallery slide 1, press kit | "A replay is a production change." Replay Room rehearses a failed webhook before replay: exact payload, exact destination, nine checks, and a second operator when the outcome is ambiguous. A seven-step rail reads Receive, Deliver, Dead letter, Diagnose, Rehearse, Guard, Replay. |
+| `launch/assets/og-image-1200x630.png` | 1200×630 | Link previews, Product Hunt gallery slide 1, press kit | "A replay is a production change." Replay Room rehearses a failed webhook before replay: exact payload, exact destination, nine checks, and a second operator for high-risk replays. A seven-step rail reads Receive, Deliver, Dead letter, Diagnose, Rehearse, Guard, Replay. |
 
 The banner and Open Graph image are designed graphics, not product screenshots. Their editable sources are `launch/assets/social-banner.html` and `launch/assets/og-image.html`.
 
@@ -59,7 +59,7 @@ Capture S12 only after the Space is republished. Today it serves the `v0.1.2` bu
 | 4 | 10.5–12.5 s | Cut to the live console: the nine-row trace with the **Two-person approval** row turning from `FAIL` to `PASS` (from S07 to S08) |
 | 5 | 12.5–14.0 s | End frame: "Rehearse a failed webhook before you replay it." over a still of S08 |
 
-Alt text: "A simulated outage drill steps a payment webhook through capture, receiver failure, dead letter, rehearsal, and guarded replay, then cuts to the live console, where a high-risk replay passes once a second operator approves."
+Alt text: "A simulated outage drill steps a payment webhook through capture, receiver failure, dead letter, rehearsal, and guarded replay, then cuts to the live console, where a high-risk replay passes once a different operator executes the approved replay."
 
 Label segment 2 as a simulation in any caption. The drill animates every 120 ms instead of 820 ms when the operating system requests reduced motion, so turn that setting off while capturing.
 
@@ -83,7 +83,7 @@ Product Hunt recommends 1270×760 gallery images. Export each from the matching 
 | 4 | S08 | `launch/assets/ph-04-dual-control.png` |
 | 5 | S03 | `launch/assets/ph-05-live-fabric.png` |
 
-The Product Hunt thumbnail is 240×240. There is no Replay Room logo yet; use the eyebrow mark from the banner (signal-orange bar plus "RR" in IBM Plex Mono on `#fffdf7`) and keep it legible at 48×48.
+The Product Hunt thumbnail is 240×240. There is no Replay Room logo yet; combine the banner's signal-orange bar with the "RR" monogram from the console masthead, set in IBM Plex Mono on `#fffdf7`, and keep it legible at 48×48.
 
 ## Banner and Open Graph specification
 

@@ -15,11 +15,11 @@ Everything needed to announce Replay Room, checked against the repository and th
 | `main` | Commit `5bd5af0`. `verify` (quality, production-audit, managed-services, container) and CodeQL are green | GitHub Actions runs on that commit |
 | Unit and API tests | 96 passed in CI; 7 integration tests pass in the separate Postgres 17 and Redis 8 job | CI log for `5bd5af0`. A local rerun passed 95 of 96; the remaining test needs IPv6 loopback, which the audit sandbox lacks |
 | Deployment-smoke tests | 9 of 9 | CI log and a local `npm run test:smoke` |
-| Conformance | 21 cases: 6 incident, 6 replay-risk, 9 replay-guard | CI log and a local `npm run conformance` |
+| Conformance | 21 checks across 15 fixtures: 6 incident diagnoses, 6 replay-risk ratings, 9 replay-guard cases | CI log and a local `npm run conformance` |
 | Builds and package | Production build, fixtures check, Space build (`credentialSurface: none`), and package check (7 version surfaces, 107 files, 101,921 bytes, clean-install smoke) pass | CI log and a local rerun |
 | Render API | `/health` `ok`; launch proof `0.3.0` at commit `26c4cd6`, topology `embedded-free` | Live readback at 03:30 UTC |
 | Render console | Live; serves the console built from the `0.3.0` source | Its bundle `index-BnJwpKZq.js` exists; `main`'s `index-C0_XG9Uy.js` does not |
-| Three-surface smoke | Passed: 12 required API paths, CORS, console, and the credential-free Space, with a 12.5-second cold start | Scheduled `live deployment smoke`, 2026-10-25 18:27 UTC |
+| Three-surface smoke | Passed: 12 required API paths, CORS, console, and the credential-free Space, with a 12.5-second cold start | Scheduled `live deployment smoke` (cron 15:23 UTC; GitHub started it at 18:27 UTC on 2026-10-25) |
 | Hugging Face Space | Running; serves the **`v0.1.2`** build | Its script `index-BMQjeDzn.js` matches a rebuild of commit `af3592b`; `0.2.0` and `0.3.0` builds produce other hashes |
 | Hugging Face dataset | Public; manifest **`0.2.0`**: 6 incidents and 7 replay-guard records | Anonymous manifest readback. The repository corpus is `0.3.0` with 9 |
 | GitHub release | `v0.3.0` from `26c4cd6`, with tarball, SBOM, SLSA provenance, and SBOM attestations | Releases API and attestations API |
@@ -39,6 +39,8 @@ Everything needed to announce Replay Room, checked against the repository and th
 | B6 | The README's `doctor -- ...` command fails | npx passes the `--` through, and the CLI rejects it with `"error": "-- requires a value"` | Fix in the release PR (step 1) |
 | B7 | No product screenshots, GIF, or video exist | Posts and the Product Hunt gallery need captured media | Capture after deploy ([media-plan.md](media-plan.md)) |
 | B8 | The essay is not published, and the press contact is undecided | `[[SUBSTACK_URL]]` and `[[CONTACT]]` remain | Publish the essay, then choose a contact |
+| B9 | The repository README, which every post links to, needs three fixes: line 87 uses a word this kit deliberately avoids ("… about its constraints"); line 6 links the internal `launch-replay-room.html` brief; and the Quick start runs `npm run db:migrate` without exporting `.env`, which fails because nothing loads it | It is the landing page for Show HN and the posts, and it ships in the npm tarball | Decide and fix in the release PR (step 1) |
+| B10 | The 300-per-minute operator rate limit covers every non-ingest route, including `/health`, `/openapi.json`, and `/.well-known/replay-room`, and Fastify runs without `trustProxy` | Behind Render's proxy, visitors may share one budget, so launch traffic to those URLs could return 429 to everyone, including your own console | Verify the keying on the live service. This kit already keeps API URLs out of the posts; a fix such as `trustProxy` or exempting public read routes is a product change for the release PR |
 
 Not a blocker, but worth knowing: the static console exposes no commit marker, so its deployed version can only be confirmed from the Render dashboard or by comparing bundle hashes.
 
@@ -85,24 +87,24 @@ Re-run each check on the day you post. If a number moved, update every file that
 | Claim | Used in | Check |
 |---|---|---|
 | 96 automated tests | messaging, LinkedIn, Show HN, press kit | The `quality` job log on the latest `main` run ("Tests N passed"), or `npm test` |
-| 9 deployment-smoke tests | Show HN, press kit | `npm run test:smoke` |
-| 21 conformance cases (6/6/9) | messaging, LinkedIn, Show HN, press kit | `npm run conformance` |
+| 9 deployment-smoke tests | messaging, Show HN, press kit | `npm run test:smoke` |
+| 21 conformance checks (6/6/9 across 15 fixtures) | messaging, LinkedIn, Show HN, press kit, release checklist | `npm run conformance` |
 | Nine replay conditions | all copy | Count the checks in `src/domain/replay-guard.ts` |
-| 30-minute approval window | messaging, FAQ, Show HN, Reddit, essay | `REPLAY_APPROVAL_TTL_MS` in `src/api/app.ts` |
+| 30-minute approval window | messaging, FAQ, Show HN, Reddit, essay, press kit, Product Hunt, demo script | `REPLAY_APPROVAL_TTL_MS` in `src/api/app.ts` |
 | Postgres 17 and Redis 8 in CI | messaging, Show HN, press kit | The service images in `.github/workflows/ci.yml` |
-| Default retry budget of 5 | press kit, demo script | The `maxAttempts` default in `src/api/app.ts` |
+| Default retry budget of 5 | press kit (the demo script sets 3 on purpose) | The `maxAttempts` default in `src/api/app.ts` |
 | `Retry-After` clamp of 15 minutes | Show HN, press kit | `MAX_RETRY_AFTER_MS` in `src/domain/retry.ts` |
 | Live version and commit | demo script, press kit | `curl -s https://replay-room-api.onrender.com/.well-known/replay-room` |
 | npm availability | every `[[NPM_LINE]]` | `npm view @avee1234/replay-room version` |
-| Dataset version and case counts | press kit, FAQ | `curl -sL https://huggingface.co/datasets/abhid1234/replay-room-fixtures/resolve/main/dataset-manifest.json` |
-| Cold-start duration | demo script | `coldStart.warmAfterMs` in the latest `live deployment smoke` log |
+| Dataset version and case counts | press kit, FAQ, this README | `curl -sL https://huggingface.co/datasets/abhid1234/replay-room-fixtures/resolve/main/dataset-manifest.json` |
+| Cold-start duration | demo script, press kit | `coldStart.warmAfterMs` in the latest `live deployment smoke` log |
 
 ## Recommended publishing order
 
 1. **Release train** ([release-checklist.md](release-checklist.md)), starting with the database expiry check, which is due by 2026-10-28.
 2. **Media capture** from the deployed release ([media-plan.md](media-plan.md)) and the demo recording ([demo-script.md](demo-script.md)).
 3. **Final copy substitution**, then `node launch/check-launch-kit.mjs --final` must pass.
-4. **Launch day, morning US Pacific:** publish the Substack essay first, so everything else can link to it. Then post on LinkedIn, then X (one option, plus the optional proof reply).
+4. **Launch day, morning US Pacific:** publish the Substack essay first, so replies and follow-up posts can link to it. Then post on LinkedIn, then X (one option, plus the optional proof reply).
 5. **Same day, 8–10 a.m. Pacific:** Show HN. Stay in the thread for three hours.
 6. **Day 2:** r/SideProject. **Day 3:** r/devops, or r/node if r/devops rules forbid it.
 7. **About a week later:** Product Hunt on its own day, with the captured gallery, plus the second LinkedIn variant and a second X option.

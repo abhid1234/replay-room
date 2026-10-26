@@ -34,6 +34,7 @@ Use `/releases/latest` in social copy so links stay correct after the next relea
 | `[[SUBSTACK_URL]]` | The published essay URL | The essay loads while signed out |
 | `[[DEMO_VIDEO_URL]]` | The uploaded demo video URL | The video plays while signed out |
 | `[[CONTACT]]` | A public contact address or form | You decide which address is public |
+| `[[IMAGE: …]]` | The named image, uploaded in the editor, with its alt text from [media-plan.md](media-plan.md) | The image exists and is final |
 
 Before posting anything, `grep -rn "\[\[" launch/` must return nothing in the copy you are about to paste.
 
@@ -93,3 +94,4 @@ Submit the clean GitHub URL, <https://github.com/abhid1234/replay-room>. Hacker 
 - Any URL containing an ingest key (`/ingest/<key>`). Ingest URLs are capabilities; anyone holding one can send events.
 - Render dashboard URLs, deploy IDs, or environment pages. They are private.
 - The repository's `launch-replay-room.html`. GitHub shows it as source, not as a page, and it carries dated internal decisions.
+- The API endpoints (`/health`, `/openapi.json`, `/.well-known/replay-room`) in any post that might spread. They share the operator rate limit, possibly across all visitors (blocker B10 in [README.md](README.md#blockers)). Quote them as text paths instead.

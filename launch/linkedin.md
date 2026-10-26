@@ -13,11 +13,11 @@ So, was the customer charged?
 
 A dead-letter queue can't answer that, and it's the question an operator has to answer before pressing "retry". Get it wrong and the customer pays twice.
 
-I built Replay Room to make that moment safer. It keeps the original webhook and every delivery attempt, explains why delivery failed, and makes you rehearse the exact payload against a controlled destination before anything goes back to production. The replay runs only after nine deterministic checks pass. When the outcome is ambiguous, a second operator has to approve it. Afterwards, the whole incident exports as a signed evidence bundle.
+I built Replay Room to make that moment safer. It keeps the original webhook and every delivery attempt, explains why delivery failed, and makes you rehearse the exact payload against a controlled destination before anything goes back to production. The replay runs only after nine deterministic checks pass. When a replay is high risk, a second operator has to sign off. Afterwards, the whole incident exports as a signed evidence bundle.
 
 It runs on Render: a static site for the console, a web service for the API and worker, Postgres as the source of truth, and Key Value as disposable queue transport.
 
-The public drill is a labeled simulation; the console behind it runs on the live stack. 96 automated tests and 21 conformance cases run in CI on every change.
+The public drill is a labeled simulation; the console behind it runs on the live stack. 96 automated tests and 21 conformance checks run in CI on every change.
 
 If you operate webhooks or dead-letter queues, I'd like to hear what's missing.
 
@@ -53,6 +53,6 @@ Code: https://github.com/abhid1234/replay-room?utm_source=linkedin&utm_medium=so
 ## Before posting
 
 - Resolve or delete the `[[NPM_LINE]]` line using [link-map.md](link-map.md).
-- Re-verify "96 automated tests and 21 conformance cases" against the latest `main` run; see [README.md](README.md#claims-that-need-fresh-verification).
+- Re-verify "96 automated tests and 21 conformance checks" against the latest `main` run; see [README.md](README.md#claims-that-need-fresh-verification).
 - Put links in the post body, not the first comment. The post is short enough that the link does not bury the hook.
 - Answer comments within the first two hours. Use [faq.md](faq.md) for the substance, in your own words.

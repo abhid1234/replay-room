@@ -29,13 +29,13 @@ How it works:
 
 - Ingest commits the event and a uniquely keyed delivery intent to Postgres before BullMQ (Redis) sees the job. Generic HMAC, GitHub, and timestamp-bound Stripe signatures are verified on the raw bytes, and signature headers are redacted before storage.
 - Workers claim intents atomically, retry with exponential backoff and jitter, honor Retry-After (clamped to 15 minutes), and keep the full attempt transcript after dead-lettering.
-- Diagnosis is a handful of deterministic rules over that transcript: 5xx means a receiver outage, 429 means throttling, other 4xx means a contract or auth rejection, no HTTP response means a network problem. No model is involved.
+- Diagnosis is a handful of deterministic rules over that transcript: 429 means throttling, 5xx a receiver outage, other 4xx a contract or auth rejection, and attempts that never got an HTTP response point to the network. No model is involved.
 - A rehearsal sends the original payload to an operator-chosen destination and records a pass or fail bound to the payload's SHA-256 and the exact destination URL. The newest rehearsal wins, so an old pass can't cover a newer failure.
 - The replay guard checks nine conditions: reason, operator identity, rehearsal exists, rehearsal passed, payload unchanged, destination unchanged, event is dead-lettered, duplicate risk acknowledged, and two-person approval. A read-only preflight returns the whole trace; the replay endpoint re-evaluates it server-side.
-- Duplicate-side-effect risk is derived from the transcript. No idempotency key, a network failure with no HTTP response, or a prior 2xx means the receiver may already have acted. That's high risk: the operator must acknowledge it, and a different operator must approve within 30 minutes, bound to the same rehearsal, payload, and destination.
+- Duplicate-side-effect risk is derived from the transcript. No idempotency key, a network failure with no HTTP response, or a prior 2xx means the receiver may already have acted. That's high risk: the operator must acknowledge it, one operator records a 30-minute approval bound to the same rehearsal, payload, and destination, and a different operator executes the replay.
 - Postgres is authoritative. A reconciler re-dispatches pending or stale intents with stable job keys every ten minutes, so losing Key Value is a recovery path instead of lost work.
 - Outbound requests validate every DNS answer against private and reserved ranges, pin the socket to the validated addresses, never follow redirects, and cap captured responses at 4 KiB.
-- Each incident exports as canonical JSON with a SHA-256 digest and an HMAC-SHA256 seal, and a small CLI inspects and verifies bundles offline.
+- Each incident exports as a versioned JSON bundle. Its canonical form is hashed with SHA-256 and sealed with HMAC-SHA256, and a small CLI inspects and verifies bundles offline.
 
 It's built on Render as four free primitives: a static site for the React console, a web service for the Fastify API (with the worker and reconciler embedded, since Render has no free background-worker or cron plan), Postgres, and Key Value. The constraints are visible on purpose: the API sleeps when idle, free Postgres expires after 30 days, and free Key Value is in-memory. The production split into API, worker, and cron services is documented.
 
@@ -49,7 +49,7 @@ Known limitations:
 - The evidence seal uses a deployment-held HMAC key. It's tamper-evident to whoever holds the key, not a public timestamp or third-party attestation.
 - It's single-tenant, early, and has no production users. The public deployment is for evaluation.
 
-CI runs 96 automated tests, 9 deployment-smoke tests, and 21 conformance cases, plus integration tests against real Postgres 17 and Redis 8. Releases carry the package tarball, a CycloneDX SBOM, and SLSA provenance attestations.
+CI runs 96 automated tests, 9 deployment-smoke tests, and 21 conformance checks, plus integration tests against real Postgres 17 and Redis 8. Releases carry the package tarball and a CycloneDX SBOM, with SLSA provenance and SBOM attestations in GitHub's attestation store.
 [[NPM_LINE]]
 
 Questions I'd value answers to:

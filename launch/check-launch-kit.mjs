@@ -26,6 +26,8 @@ const REQUIRED = [
 ];
 // Files whose text gets pasted into public channels.
 const POSTS = ["x.md", "linkedin.md", "show-hn.md", "reddit.md", "substack.md", "product-hunt.md"];
+// Files that document the placeholders themselves; everything else is copy someone will paste or quote.
+const PLACEHOLDER_DOCS = new Set(["README.md", "link-map.md", "release-checklist.md"]);
 const ALLOWED_HOSTS = new Set([
   "replay-room-web.onrender.com", "replay-room-api.onrender.com", "github.com", "huggingface.co",
   "abhid1234-replay-room.static.hf.space", "www.npmjs.com", "httpbin.org", "cyclonedx.org",
@@ -111,9 +113,17 @@ for (const { file, text } of markdown) {
   }
   for (const match of text.matchAll(/\[\[[A-Z_]+(?::[^\]]*)?\]\]/g)) {
     const where = `${file}:${lineOf(text, match.index)}: ${match[0]}`;
-    if (final && POSTS.includes(file) && insidePostCopy(file, text, match.index)) errors.push(`unresolved placeholder ${where}`);
+    if (final && isLiveCopy(file, text, match.index, match[0].length)) errors.push(`unresolved placeholder ${where}`);
     else notes.push(where);
   }
+}
+
+// A placeholder counts as live copy when it sits in a post's pasted text, or anywhere outside
+// inline code in the other files. Inline-code mentions (`[[NPM_LINE]]`) are instructions.
+function isLiveCopy(file, text, index, length) {
+  if (POSTS.includes(file)) return insidePostCopy(file, text, index);
+  if (PLACEHOLDER_DOCS.has(file)) return false;
+  return !(text[index - 1] === "`" && text[index + length] === "`");
 }
 
 // The text that actually gets pasted: fenced ```text blocks, or the essay body after its header.

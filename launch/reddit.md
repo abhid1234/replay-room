@@ -21,7 +21,7 @@ What it does:
 - keeps the original webhook and every delivery attempt
 - explains why delivery failed (deterministic rules, no AI)
 - makes you rehearse the exact payload against a controlled destination first
-- checks nine conditions before the real replay, and wants a second person's sign-off when the outcome is ambiguous
+- checks nine conditions before the real replay, and wants a second operator's sign-off when the replay is high risk
 - exports the incident as a signed evidence file
 
 Stack: Fastify, BullMQ, Postgres, React. Postgres is the source of truth and Redis is just transport, so losing the queue doesn't lose track of what must happen next.
@@ -57,10 +57,10 @@ I built an open-source console, Replay Room, that turns that decision into a che
 - the failure gets a deterministic diagnosis from the attempt transcript (5xx, 429, 4xx, no response)
 - recovery is rehearsed against a controlled destination, and the result is bound to the payload's SHA-256 and the exact destination URL
 - replay requires nine conditions to pass; a read-only preflight shows each one, and the server re-checks them
-- if the receiver may already have acted (no idempotency key, no HTTP response, or a prior 2xx), the operator has to acknowledge it and a different operator must approve within 30 minutes
+- if the replay is high risk (no idempotency key, no HTTP response, or a prior 2xx), the operator has to acknowledge it; one operator records a 30-minute approval and a different operator executes the replay
 - outbound delivery is DNS-pinned, refuses private ranges, and never follows redirects
 
-Delivery is at-least-once. This doesn't make duplicate side effects impossible; it makes the risk explicit and puts a second person on the decision.
+Delivery is at-least-once. This doesn't make duplicate side effects impossible; it makes the risk explicit and puts a second operator on the decision.
 
 It runs on Render's free plans as an evaluation setup: one web service with an embedded worker and reconciler, a static site, Postgres, and Key Value. The production split into separate worker and cron services is documented.
 

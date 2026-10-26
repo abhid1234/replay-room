@@ -7,20 +7,23 @@ Nothing in this checklist has been done yet. As of 2026-10-26 the public surface
 ## 0. Platform expiry check (do this first)
 
 - [ ] In the Render dashboard, open `replay-room-db` and read its expiry date. The free Blueprint went live on 2026-09-28, and free Render Postgres expires 30 days after creation, so this database probably expires on or about **2026-10-28**. After expiry the API's `/health` fails and the live console stops working.
-- [ ] If the expiry date is before launch day plus two weeks, either upgrade the database to a paid plan, or recreate a free database and redeploy. The data is synthetic demo data, so recreating is acceptable, but it starts a new 30-day clock.
+- [ ] If the expiry date is before launch day plus two weeks, either upgrade the database to a paid plan, or delete it and create a new free one (a workspace can have only one free Postgres database), then redeploy. The data is synthetic demo data, so recreating is acceptable, but it starts a new 30-day clock.
 - [ ] Record the new expiry date in [README.md](README.md#current-readiness).
 
 ## 1. Scope freeze
 
-- [ ] Freeze `main`: no merges except the release PR until step 6 is done.
+- [ ] Freeze `main`: no merges except the release PR until step 8 is done. The npm package includes `docs/` and `README.md`, so any merge before npm publishes could make its tarball differ from the GitHub release.
 - [ ] Confirm the release scope is exactly the product changes after `26c4cd6`:
   - `e0d1a3a`: collapse dashboard polling into one snapshot (`GET /api/dashboard`)
   - `14e6300`: adaptive, completion-paced polling with hidden-tab pause and transient backoff
   - `5bc33ed`: cancel stale operator requests
   - `f3908ee`: Hugging Face trusted publishing
   - `fastify` `5.12.5` → `5.12.7` and the other dependency patches in `CHANGELOG.md`
-- [ ] Confirm the version is a minor bump. `/api/dashboard` is an additive API, and the version history so far uses minor versions for feature releases, so `0.4.0` fits.
+- [ ] Confirm the version. `/api/dashboard` is an additive API change, so a minor bump to `0.4.0` fits semantic versioning before 1.0.
+- [ ] Before merging anything in step 4, confirm Render auto-deploy is off for `replay-room-api` and `replay-room-web`. `render.yaml` declares `autoDeployTrigger: checksPass` for both, so if the dashboard follows the Blueprint, merging the release PR deploys both services at once, console included; that is blocker B3. The API stayed on `26c4cd6` through seven later merges, which suggests it is off in practice, but check the dashboard.
 - [ ] Decide the fix for the `doctor` separator defect: the README tells consumers to run `npx @avee1234/replay-room doctor -- ...`, but npx passes the `--` through and the CLI fails with `"error": "-- requires a value"`. Either drop the `--` from the README (a documentation fix), or make the CLI ignore a leading `--` (a product change). Include the chosen fix in the release PR.
+- [ ] Decide the repository README fixes in blocker B9 (the launch landing page) and include them in the release PR.
+- [ ] Optional product change: add `og:image` and `twitter:card` meta tags to `web/index.html` that point at a hosted copy of `launch/assets/og-image-1200x630.png`, so links to the console show the Open Graph image.
 
 ## 2. Version-surface bump
 
@@ -32,14 +35,22 @@ Nothing in this checklist has been done yet. As of 2026-10-26 the public surface
 - [ ] `fixtures/manifest.json`: set `version` to `"0.4.0"`.
 - [ ] `npm run fixtures:build` regenerates `fixtures/huggingface/dataset-manifest.json` at `0.4.0`.
 - [ ] `CHANGELOG.md`: rename `## Unreleased` to `## 0.4.0 - <release date>`, and add an `### Added` entry for `GET /api/dashboard` and the Hugging Face trusted-publishing workflow.
-- [ ] `npm install` to refresh the lockfile, then `npm run test:package` reports `"versionSurfaces":7` at `0.4.0`.
+- [ ] `npm install` to refresh the lockfile, then `npm run build && npm run test:package`. The package check reads the OpenAPI version from the compiled `dist/`, so it needs a fresh build. Expect `"versionSurfaces":7` at `0.4.0`.
 - [ ] Open the release PR with only these changes and the separator fix.
 
 ## 3. Full local gate
 
 - [ ] `npm ci`
-- [ ] `npm run verify` passes: typecheck, 96+ unit and API tests, 9 deployment-smoke tests, the production build, 21 conformance cases, the fixtures check, the Space build, and the package check with 7 version surfaces.
-- [ ] `docker compose up -d && npm run test:integration` passes against local Postgres and Redis.
+- [ ] `npm run verify` passes: typecheck, 96+ unit and API tests, 9 deployment-smoke tests, the production build, 21 conformance checks, the fixtures check, the Space build, and the package check with 7 version surfaces.
+- [ ] The integration tests pass against throwaway Postgres 17 and Redis 8 containers that match CI. They truncate their tables, so never point them at the development database from `docker-compose.yml`:
+
+  ```bash
+  docker run -d --rm --name rr-it-pg -p 55432:5432 -e POSTGRES_USER=replay_room -e POSTGRES_PASSWORD=replay_room -e POSTGRES_DB=replay_room_test postgres:17-alpine
+  docker run -d --rm --name rr-it-redis -p 56379:6379 redis:8-alpine
+  DATABASE_URL=postgresql://replay_room:replay_room@127.0.0.1:55432/replay_room_test REDIS_URL=redis://127.0.0.1:56379/15 npm run test:integration
+  docker stop rr-it-pg rr-it-redis
+  ```
+
 - [ ] Record the test counts. If they changed, update the numbers in `launch/` before posting.
 
 ## 4. GitHub checks
@@ -67,7 +78,7 @@ The workflow builds from the commit at the head of `main` when you dispatch it, 
 
 **Order matters.** The `0.4.0` console polls only `GET /api/dashboard`, which the `0.3.0` API does not have. Deploy the API first; if the console deploys first, the authenticated console breaks until the API catches up.
 
-- [ ] Confirm auto-deploy is off for both services. The API stayed on `26c4cd6` through seven later merges, which suggests it is, but check the dashboard.
+- [ ] Auto-deploy was confirmed off in step 1. If either service deployed on its own after the merge, check which commit each one runs before going further.
 - [ ] Deploy `replay-room-api` at the release SHA: Manual Deploy → deploy a specific commit.
 - [ ] Readback: `curl -s https://replay-room-api.onrender.com/.well-known/replay-room` shows `"version":"0.4.0"` and `deployment.commit` equal to the first seven characters of the release SHA.
 - [ ] Readback: `curl -s https://replay-room-api.onrender.com/openapi.json` shows `info.version` `0.4.0` and includes `/api/dashboard`.
@@ -83,7 +94,7 @@ One-time setup, before the first publish:
 
 Publish:
 
-- [ ] If step 5 ran with `publish_npm` `false`, re-run the workflow with `publish_npm` `true` and `create_github_release` `false`. Its registry check refuses to republish an existing version and verifies integrity.
+- [ ] If step 5 ran with `publish_npm` `false`, re-run the workflow with `publish_npm` `true` and `create_github_release` `false`, dispatched on the `v0.4.0` tag rather than `main`, so the package is rebuilt from the released commit. Its registry check refuses to republish an existing version and verifies integrity.
 - [ ] Readback: `npm view @avee1234/replay-room@0.4.0 version dist.integrity` prints `0.4.0`.
 - [ ] The registry tarball is identical to the release asset: `openssl dgst -sha512 -binary ./rr-0.4.0/avee1234-replay-room-0.4.0.tgz | openssl base64 -A` equals the base64 part of `dist.integrity`.
 - [ ] The npm package page shows a provenance statement linked to this repository.
@@ -134,13 +145,13 @@ From a normal network connection, not a restricted sandbox:
 - [ ] Ten minutes before each post, open `/health` so the free API is awake.
 - [ ] Keep the Render dashboard open on `replay-room-api`: watch logs for 5xx bursts, memory, and the free instance-hour budget.
 - [ ] Dispatch the **live deployment smoke** workflow after each major post. It also runs daily at 15:23 UTC.
-- [ ] Watch the rate limits: ingest allows 600 requests per minute per endpoint and operator routes allow 300 per minute. Public visitors mostly load the static site and the drill, which do not touch the API.
+- [ ] Watch the rate limits. Ingest allows 600 requests per minute per endpoint. The 300-per-minute limit covers every other API route, including the public `/health`, `/openapi.json`, and `/.well-known/replay-room`, and Fastify runs without `trustProxy`, so behind Render's proxy many visitors may share one budget (blocker B10). Keep those URLs out of high-traffic posts; the static console and the drill do not touch the API until someone connects.
 - [ ] Stay in each thread for the first two to three hours. Answer with [faq.md](faq.md) in your own words.
 - [ ] If anyone posts an ingest URL, stop using that endpoint for demos. The API cannot delete endpoints, so create a new one; the leaked endpoint forwards only to its configured demo receiver.
 
 ## 15. Rollback and correction
 
-- **API or console regression:** in the Render dashboard, roll back `replay-room-api` and `replay-room-web` to the previous deploy, the API first if the console depends on it. Re-run the doctor with `--expected-version` set to the rolled-back version.
+- **API or console regression:** in the Render dashboard, roll back `replay-room-web` first, then `replay-room-api`: the reverse of the deploy order. The `0.3.0` console works against the `0.4.0` API, but the `0.4.0` console needs `/api/dashboard`, which the `0.3.0` API lacks. Re-run the doctor with `--expected-version` set to the rolled-back version.
 - **Bad npm release:** you cannot reuse a version number. Run `npm deprecate @avee1234/replay-room@0.4.0 "<reason>; use 0.4.1"` and publish `0.4.1` through the same workflow. Unpublishing is limited and breaks installs; prefer deprecation.
 - **Bad GitHub release:** edit the release notes to state the problem, mark it as a pre-release if needed, and cut `0.4.1`. Keep the original assets; their attestations are evidence.
 - **Bad Hugging Face publish:** revert the dataset or Space repository to the previous commit through its Files and versions history, then repeat the step 9 readbacks.

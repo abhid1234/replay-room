@@ -48,10 +48,10 @@ Replay Room treats that replay as a production change:
 - it explains the failure with deterministic rules (no model decides anything)
 - it makes you rehearse the exact payload against a controlled destination
 - it checks nine conditions before the real replay
-- it asks a second operator to approve when the outcome is ambiguous
+- it asks a second operator to sign off on high-risk replays
 - it exports the incident as a signed evidence bundle
 
-It runs on Render: a static site, a web service, Postgres as the source of truth, and Key Value as disposable queue transport. The public drill on the website is a labeled simulation; the operator console runs on the live stack and needs your own deployment's token.
+It runs on Render: a static site, a web service, Postgres as the source of truth, and Key Value as disposable queue transport. The public drill on the website is a labeled simulation. The operator console runs on the live stack and needs the deployment's admin token, so to try the full flow, deploy your own copy from the repo.
 
 It's early and open source, and the public deployment is an evaluation setup, not a hosted service. I'd love feedback on where the safety checks are too strict, too loose, or missing something you'd need.
 ```
@@ -62,7 +62,7 @@ It's early and open source, and the public deployment is an evaluation setup, no
 - **Deterministic diagnosis:** receiver outage, throttling, contract rejection, network failure, and active recovery, each with evidence and a next action.
 - **Rehearsal:** the exact payload sent to a controlled destination, bound to its SHA-256 digest and destination URL.
 - **Nine-condition replay guard:** a read-only preflight shows every condition; the server re-checks them before replaying.
-- **Two-person approval:** high-risk replays need a 30-minute approval from a different operator.
+- **Two-person approval:** for high-risk replays, one operator records a 30-minute approval and a different operator executes the replay.
 - **Durable intents:** every delivery intent is stored in Postgres before the queue, so a lost queue is recoverable.
 - **Signed evidence:** incidents export as HMAC-sealed JSON that can be inspected and verified offline.
 - **Provider signatures:** generic HMAC, GitHub, and timestamp-bound Stripe verification on raw request bytes.
@@ -79,7 +79,7 @@ Rewrite each in your own words when you reply; do not paste them verbatim.
 
 ### "Does it guarantee exactly-once delivery?"
 
-> No. It's at-least-once, like almost every webhook system. If a receiver processes a request and the connection drops before the response is recorded, nobody can know for sure. Replay Room makes that ambiguity explicit and requires acknowledgement and a second approver instead of hiding it.
+> No. It's at-least-once, like almost every webhook system. If a receiver processes a request and the connection drops before the response is recorded, nobody can know for sure. Replay Room makes that ambiguity explicit and requires acknowledgement and a second operator instead of hiding it.
 
 ### "Is there AI in it?"
 
@@ -87,11 +87,11 @@ Rewrite each in your own words when you reply; do not paste them verbatim.
 
 ### "Can I try it without deploying anything?"
 
-> Yes: the drill on the website and on Hugging Face walks through a simulated incident. The real console needs a deployment's admin token, so the full flow means deploying your own copy from the repo's Render Blueprint or running it locally with Docker Compose.
+> Yes: the drill on the website and on Hugging Face walks through a simulated incident. The real console needs a deployment's admin token, so the full flow means deploying your own copy from the repo's Render Blueprint or running it locally, with Docker Compose providing Postgres and Redis.
 
 ### "Is it production-ready?"
 
-> Not yet. The public deployment runs on Render's free plans for evaluation. Production use needs per-user authentication, encryption at rest for stored payloads, an egress allowlist, and paid Postgres and Key Value. The deployment guide documents that upgrade.
+> Not yet. The public deployment runs on Render's free plans for evaluation. Production use needs per-user authentication, encryption at rest for stored payloads, an egress allowlist, and paid Postgres and Key Value. The deployment guide and README describe that upgrade path.
 
 ### "Why Render?"
 

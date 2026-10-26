@@ -18,7 +18,7 @@ Receivers should use idempotency keys, and Replay Room rewards them: a stable ke
 
 ### 4. What does "receiver ambiguity" mean, and how is it detected?
 
-It means the sender cannot tell whether the receiver already acted. Replay Room rates duplicate-side-effect risk from the attempt transcript. Missing idempotency evidence, an attempt that received no HTTP response, or a prior 2xx response is high risk. Multiple attempts, throttling, and 5xx responses are elevated. A stable idempotency key with only permanent 4xx rejections is low. The rules are deterministic and covered by six replay-risk conformance cases. See [Duplicate-side-effect risk](../docs/ARCHITECTURE.md#duplicate-side-effect-risk).
+It means the sender cannot tell whether the receiver already acted. Replay Room rates duplicate-side-effect risk from the attempt transcript. Missing idempotency evidence, an attempt that received no HTTP response, or a prior 2xx response is high risk. Multiple attempts, throttling, and 5xx responses are elevated. A stable idempotency key with only permanent 4xx rejections is low. The rules are deterministic. Six synthetic fixtures pin the expected rating for each incident, and unit tests cover further cases. See [Duplicate-side-effect risk](../docs/ARCHITECTURE.md#duplicate-side-effect-risk).
 
 ### 5. What exactly is a rehearsal?
 
@@ -62,11 +62,11 @@ It proves the bundle still matches what this deployment exported. The server can
 
 ### 14. What happens if Redis (Render Key Value) is lost?
 
-Work is not lost. Before a job reaches Key Value, Replay Room commits the exact delivery intent to Postgres with a stable job key, retry ordinal, target, actor, and reason. A reconciler runs every ten minutes, re-dispatches pending or stale intents with the same job key, and synthesizes a job only for an orphaned event with no open intent. Duplicate queue messages are harmless because the worker must claim the intent atomically in Postgres first.
+Work is not lost. Before a job reaches Key Value, Replay Room commits the exact delivery intent to Postgres with a stable job key, retry ordinal, target, actor, and reason. A reconciler runs every ten minutes, re-dispatches pending or stale intents with the same job key, and synthesizes a job only for an orphaned event with no open intent. A duplicate queue message for an intent that is already claimed is a no-op, because the worker must claim the intent atomically in Postgres first. A worker that crashes mid-send is the exception: once its five-minute lease expires, the intent is re-dispatched, which is exactly the at-least-once ambiguity the risk rules exist for.
 
 ### 15. Why is Postgres the authority instead of the queue?
 
-Because the queue is transport, not memory. Postgres holds events, delivery intents, attempts, rehearsals, approvals, and the append-only audit log; the free Key Value instance is in-memory and can lose data on restart. Making Postgres authoritative turns queue loss into a recovery step and keeps the evidence chain in one durable place.
+Because the queue is transport, not memory. Postgres holds events, delivery intents, attempts, rehearsals, approvals, and the append-only audit log (kept for the configured retention window, 30 days by default); the free Key Value instance is in-memory and can lose data on restart. Making Postgres authoritative turns queue loss into a recovery step and keeps the evidence chain in one durable place.
 
 ### 16. What does the free Render topology give up?
 
@@ -88,7 +88,7 @@ The outage drill on the landing page and on Hugging Face is a labeled simulation
 
 ### 20. What is the npm package for?
 
-`@avee1234/replay-room` packages the portable parts: the `replay-room.evidence/v1` schema and TypeScript types, the evidence verifier CLI (`inspect` and `verify`), the synthetic fixtures, and the `doctor` command that checks a deployment's API, console, CORS policy, and demo boundary. It is not the server.
+`@avee1234/replay-room` packages the portable parts: the `replay-room.evidence/v1` schema and TypeScript types, the evidence verifier CLI (`inspect` and `verify`), the synthetic fixtures, and the `doctor` command that checks a deployment's API, console, CORS policy, and demo boundary. Its public API and CLI cover the portable parts. The tarball also contains the compiled server, but installing the package is not a supported way to run Replay Room.
 
 As of 2026-10-26 the package is not on npm: `npm view @avee1234/replay-room` returned `E404`. The exact tarball is attached to each GitHub release with a CycloneDX SBOM and provenance attestations. Once the registry readback passes, replace the next line with the npm line from [link-map.md](link-map.md); otherwise delete it.
 
@@ -96,11 +96,11 @@ As of 2026-10-26 the package is not on npm: `npm view @avee1234/replay-room` ret
 
 ### 21. What is on Hugging Face?
 
-Two things. The Space is a static, credential-free copy of the outage drill; it never asks for or stores an admin token. The dataset is the synthetic incident and replay-guard corpus used by the conformance tests, with a manifest of byte lengths and SHA-256 digests. Neither is a second backend; Render remains the system of record.
+Two things. The Space is a static, credential-free copy of the outage drill; it never asks for or stores an admin token. The dataset is the synthetic incident and replay-guard corpus used by the conformance tests, with a manifest of byte lengths and SHA-256 digests. The public mirror is currently version `0.2.0` with seven replay-guard records; the repository has nine, and the next release republishes it. Neither is a second backend; Render remains the system of record.
 
 ### 22. Can I run it myself?
 
-Yes. Locally: `docker compose up -d`, `npm install`, `npm run db:migrate`, then `npm run dev`, `npm run dev:worker`, and `npm run dev:web`; local development includes test sinks that accept, retry, or reject. On Render: create a Blueprint from `render.yaml`, set `WEB_ORIGIN` and `VITE_API_BASE`, and confirm every plan says Free. See [docs/DEPLOYING.md](../docs/DEPLOYING.md).
+Yes. Locally: `cp .env.example .env`, `docker compose up -d`, `npm install`, then export the variables (`set -a; . ./.env; set +a`), because nothing loads `.env` automatically. Then run `npm run db:migrate`, `npm run dev`, `npm run dev:worker`, and `npm run dev:web`. Local development includes test sinks that accept, retry, or reject. On Render: create a Blueprint from `render.yaml`, set `WEB_ORIGIN` and `VITE_API_BASE`, and confirm every plan says Free. See [docs/DEPLOYING.md](../docs/DEPLOYING.md).
 
 ### 23. Does it have users?
 

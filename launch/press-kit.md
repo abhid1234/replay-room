@@ -22,14 +22,14 @@ The first release, `0.1.0`, shipped on 2026-09-27. Two-person approval for high-
 | Runtime | Node.js 22 or later, TypeScript |
 | API | Fastify, with an OpenAPI 3.1 contract at `/openapi.json` |
 | Queue | BullMQ on Render Key Value (Redis-compatible), used as disposable transport |
-| Ledger | Render Postgres: events, delivery intents, attempts, rehearsals, approvals, and the append-only audit log |
+| Ledger | Render Postgres: events, delivery intents, attempts, rehearsals, approvals, and the append-only audit log, kept for a 30-day retention window by default |
 | Console | React, built with Vite, on a Render static site |
 | Delivery | At-least-once; bounded exponential backoff with jitter; `Retry-After` honored up to 15 minutes; default retry budget of 5 attempts |
 | Replay guard | Nine conditions, available as a read-only preflight and re-checked on the server |
-| Dual control | High-risk replays need a 30-minute approval from a different operator, bound to the rehearsal, payload digest, and destination |
+| Dual control | For high-risk replays, one operator records a 30-minute approval bound to the rehearsal, payload digest, and destination, and a different operator executes the replay. Operator identities are declared names under one shared admin token |
 | Signatures | Generic HMAC, GitHub, and timestamp-bound Stripe verification on raw request bytes |
 | Egress | DNS-pinned outbound sockets, private and reserved ranges blocked in production, no redirects followed |
-| Evidence | `replay-room.evidence/v1`: canonical JSON with a SHA-256 digest and an HMAC-SHA256 seal |
+| Evidence | `replay-room.evidence/v1`: a versioned JSON bundle whose canonical form carries a SHA-256 digest and an HMAC-SHA256 seal |
 | Free topology | Four Render resources from one `render.yaml` Blueprint: static site, web service with embedded worker and reconciler, Postgres, Key Value |
 | Hugging Face | A credential-free outage drill (Space) and a synthetic fixture dataset |
 | Package | `@avee1234/replay-room`: schema, verifier CLI, fixtures, and deployment doctor. Not yet on npm; release tarballs are on GitHub |
@@ -41,12 +41,12 @@ Each point was read back on the date shown. Re-verify before quoting; see [READM
 | Proof point | Evidence | Verified |
 |---|---|---|
 | 96 automated tests pass; 7 integration tests pass separately against Postgres 17 and Redis 8 | GitHub Actions `verify` run on `main` commit `5bd5af0` | 2026-10-26 |
-| 9 deployment-smoke tests and 21 conformance cases (6 incident, 6 replay-risk, 9 replay-guard) pass | The same CI run, and a local rerun of `npm run test:smoke` and `npm run conformance` | 2026-10-26 |
+| 9 deployment-smoke tests and 21 conformance checks (6 incident diagnoses, 6 replay-risk ratings, 9 replay-guard cases, across 15 fixtures) pass | The same CI run, and a local rerun of `npm run test:smoke` and `npm run conformance` | 2026-10-26 |
 | CodeQL and the high-severity dependency audit are green on `main` | GitHub Actions on `5bd5af0` | 2026-10-26 |
 | The live API is healthy, with Postgres and Key Value answering in 2 ms | `GET https://replay-room-api.onrender.com/health` | 2026-10-26 |
 | The live deployment reports version `0.3.0`, commit `26c4cd6`, and the `two-person-approval` capability | `GET /.well-known/replay-room` | 2026-10-26 |
 | The three-surface smoke check passed (API, console, CORS, and the credential-free Hugging Face drill), with a 12.5-second cold start | Scheduled `live deployment smoke` workflow | 2026-10-25 |
-| `v0.3.0` release carries the tarball (`sha256:17afb551…fbf95`), a CycloneDX SBOM (`sha256:d029b0a1…07d67`), and SLSA provenance and SBOM attestations | GitHub release and attestations API | 2026-10-26 |
+| The `v0.3.0` release carries the tarball (`sha256:17afb551…fbf95`) and a CycloneDX SBOM (`sha256:d029b0a1…07d67`); SLSA provenance and SBOM attestations exist for the tarball digest | GitHub release and attestations API | 2026-10-26 |
 
 Do not quote these as current until the release train in [release-checklist.md](release-checklist.md) is done: the npm package (returns `E404`), a `v0.4.0` release (does not exist), the Hugging Face Space at the current version (serves a `v0.1.2` build), or the dataset at nine replay-guard cases (the public mirror is `0.2.0` with seven).
 

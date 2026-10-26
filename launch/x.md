@@ -21,12 +21,12 @@ Length: 276 of 280.
 ```text
 Replaying a failed webhook is a production change. Get it wrong and an order ships twice.
 
-Replay Room makes you rehearse the exact payload first, pass 9 deterministic checks, and get a second operator's sign-off when the outcome is ambiguous.
+Replay Room makes you rehearse the exact payload first, pass 9 deterministic checks, and get a second operator's sign-off when the replay is high risk.
 
 Source: https://github.com/abhid1234/replay-room?utm_source=x&utm_medium=social&utm_campaign=replay-room-launch&utm_content=x-option-b
 ```
 
-Length: 276 of 280.
+Length: 275 of 280.
 
 ## Option C: the queue that forgets
 
@@ -45,16 +45,16 @@ Length: 266 of 280.
 Post this as a single reply under whichever option you choose, not as a thread. It is useful because the first post can carry only one link.
 
 ```text
-Source, live API proof, and the synthetic fixture dataset:
+Source, architecture, and the synthetic fixture dataset:
 
 https://github.com/abhid1234/replay-room
-https://replay-room-api.onrender.com/.well-known/replay-room
+https://github.com/abhid1234/replay-room/blob/main/docs/ARCHITECTURE.md
 https://huggingface.co/datasets/abhid1234/replay-room-fixtures
 
 The drill is a labeled simulation. The console behind it runs on Render.
 ```
 
-Length: 205 of 280.
+Length: 203 of 280.
 
 ## Posting notes
 
@@ -62,3 +62,4 @@ Length: 205 of 280.
 - If you tag Render, do it only in Option C, and confirm the handle from the footer of render.com first; this kit does not assume one.
 - Reply to technical questions with links to [faq.md](faq.md) answers, rewritten in your own words.
 - Do not post an npm install line until `[[NPM_LINE]]` has been resolved in [link-map.md](link-map.md).
+- Do not link the API endpoints (`/health`, `/openapi.json`, `/.well-known/replay-room`) in a post that might spread. They share the operator rate limit, possibly across all visitors; see blocker B10 in [README.md](README.md#blockers).
