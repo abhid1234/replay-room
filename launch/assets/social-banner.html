@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Replay Room social banner (1100×220)</title>
+<!-- Editable source for launch/assets/social-banner-1100x220.png.
+     Render: npx playwright screenshot --viewport-size "1100, 220" launch/assets/social-banner.html launch/assets/social-banner-1100x220.png
+     Palette follows launch-replay-room.html; type is Newsreader, Inter, and IBM Plex Mono. Edit text in place; keep every word true. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@500;600&family=Newsreader:opsz,wght@6..72,500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --ink: #151617;
+    --muted: #5d6266;
+    --paper: #f4f0e7;
+    --card: #fffdf7;
+    --line: #cfc8bb;
+    --signal: #d84f2a;
+    --signal-soft: #f7d7ca;
+    --safe: #16745d;
+    --safe-soft: #d8eee7;
+    --warn: #9a6215;
+    --warn-soft: #f6e6c8;
+    --blue: #245f78;
+    --blue-soft: #d9e9ee;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1100px; height: 220px; overflow: hidden; }
+  body {
+    position: relative;
+    color: var(--ink);
+    background:
+      linear-gradient(rgba(70, 60, 48, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(70, 60, 48, 0.05) 1px, transparent 1px),
+      var(--paper);
+    background-size: 22px 22px;
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  }
+  .frame {
+    position: absolute;
+    inset: 16px;
+    display: grid;
+    grid-template-columns: 1fr 392px;
+    align-items: center;
+    gap: 28px;
+    padding: 0 26px 0 30px;
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    border: 1px solid var(--line);
+  }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font: 600 13px/1 "IBM Plex Mono", Menlo, monospace;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+  .eyebrow::before { content: ""; width: 30px; height: 3px; background: var(--signal); }
+  h1 {
+    margin-top: 14px;
+    font: 500 38px/1.04 Newsreader, Georgia, "Times New Roman", serif;
+    letter-spacing: -.02em;
+  }
+  h1 span { color: var(--signal); }
+  .source {
+    margin-top: 14px;
+    font: 500 13px/1 "IBM Plex Mono", Menlo, monospace;
+    color: var(--muted);
+  }
+  .flow { display: grid; gap: 7px; }
+  .step {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font: 600 12.5px/1 "IBM Plex Mono", Menlo, monospace;
+    letter-spacing: .04em;
+  }
+  .step i {
+    width: 26px; height: 18px;
+    display: grid; place-items: center;
+    font-style: normal; font-size: 10.5px;
+  }
+  .step small { font: 500 11.5px/1 Inter, Arial, sans-serif; color: var(--muted); letter-spacing: 0; }
+  .dlq i { background: var(--signal-soft); color: var(--signal); }
+  .rehearse i { background: var(--blue-soft); color: var(--blue); }
+  .guard i { background: var(--warn-soft); color: var(--warn); }
+  .replay i { background: var(--safe-soft); color: var(--safe); }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div>
+      <div class="eyebrow">Replay Room</div>
+      <h1>Rehearse a failed webhook<br><span>before you replay it.</span></h1>
+      <div class="source">github.com/abhid1234/replay-room</div>
+    </div>
+    <div class="flow" aria-hidden="true">
+      <div class="step dlq"><i>01</i>Dead letter<small>attempts kept</small></div>
+      <div class="step rehearse"><i>02</i>Rehearse<small>exact payload + URL</small></div>
+      <div class="step guard"><i>03</i>Guard<small>nine conditions</small></div>
+      <div class="step replay"><i>04</i>Replay<small>durable intent</small></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Replay Room Open Graph image (1200×630)</title>
+<!-- Editable source for launch/assets/og-image-1200x630.png.
+     Render: npx playwright screenshot --viewport-size "1200, 630" launch/assets/og-image.html launch/assets/og-image-1200x630.png
+     Palette follows launch-replay-room.html; type is Newsreader, Inter, and IBM Plex Mono. Keep text inside the 1100×580 safe area. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@500;600&family=Newsreader:opsz,wght@6..72,500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --ink: #151617;
+    --muted: #5d6266;
+    --paper: #f4f0e7;
+    --card: #fffdf7;
+    --line: #cfc8bb;
+    --signal: #d84f2a;
+    --signal-soft: #f7d7ca;
+    --safe: #16745d;
+    --safe-soft: #d8eee7;
+    --warn: #9a6215;
+    --warn-soft: #f6e6c8;
+    --blue: #245f78;
+    --blue-soft: #d9e9ee;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative;
+    color: var(--ink);
+    background:
+      linear-gradient(rgba(70, 60, 48, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(70, 60, 48, 0.05) 1px, transparent 1px),
+      var(--paper);
+    background-size: 24px 24px;
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  }
+  .frame {
+    position: absolute;
+    inset: 28px;
+    display: flex;
+    flex-direction: column;
+    padding: 46px 56px 38px;
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 36px rgba(50, 42, 31, 0.09);
+  }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: 600 17px/1 "IBM Plex Mono", Menlo, monospace;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  .eyebrow::before { content: ""; width: 40px; height: 4px; background: var(--signal); }
+  h1 {
+    margin-top: 30px;
+    font: 500 84px/.98 Newsreader, Georgia, "Times New Roman", serif;
+    letter-spacing: -.035em;
+  }
+  h1 span { color: var(--signal); }
+  .lede {
+    margin-top: 22px;
+    max-width: 1032px;
+    font: 500 26px/1.3 Inter, Arial, sans-serif;
+    letter-spacing: -.01em;
+  }
+  .rail {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+  .rail div {
+    padding: 11px 10px 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font: 600 14px/1.1 "IBM Plex Mono", Menlo, monospace;
+    text-align: center;
+  }
+  .rail b {
+    display: block;
+    margin-bottom: 6px;
+    font: 600 11px/1 "IBM Plex Mono", Menlo, monospace;
+    color: var(--muted);
+    letter-spacing: .1em;
+  }
+  .rail .dlq { background: var(--signal-soft); border-color: #e9b4a1; }
+  .rail .rehearse { background: var(--blue-soft); border-color: #a9c8d3; }
+  .rail .guard { background: var(--warn-soft); border-color: #e1c38c; }
+  .rail .replay { background: var(--safe-soft); border-color: #9fcdbd; }
+  .foot {
+    margin-top: 18px;
+    display: flex;
+    justify-content: space-between;
+    font: 500 15px/1 "IBM Plex Mono", Menlo, monospace;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="eyebrow">Replay Room · open source · built on Render</div>
+    <h1>A replay is a<br><span>production change.</span></h1>
+    <p class="lede">Rehearse a failed webhook before you replay it: exact payload, exact destination, nine checks, and a second operator for high-risk replays.</p>
+    <div class="rail" aria-hidden="true">
+      <div><b>01</b>Receive</div>
+      <div><b>02</b>Deliver</div>
+      <div class="dlq"><b>03</b>Dead letter</div>
+      <div><b>04</b>Diagnose</div>
+      <div class="rehearse"><b>05</b>Rehearse</div>
+      <div class="guard"><b>06</b>Guard</div>
+      <div class="replay"><b>07</b>Replay</div>
+    </div>
+    <div class="foot"><span>github.com/abhid1234/replay-room</span><span>replay-room-web.onrender.com</span></div>
+  </div>
+</body>
+</html>
