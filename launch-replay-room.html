@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Replay Room product and launch brief." />
+  <title>Replay Room — Product &amp; Launch Brief</title>
+  <style>
+    :root {
+      --ink: #151617;
+      --muted: #5d6266;
+      --paper: #f4f0e7;
+      --card: #fffdf7;
+      --line: #cfc8bb;
+      --signal: #d84f2a;
+      --signal-soft: #f7d7ca;
+      --safe: #16745d;
+      --safe-soft: #d8eee7;
+      --warn: #9a6215;
+      --warn-soft: #f6e6c8;
+      --blue: #245f78;
+      --blue-soft: #d9e9ee;
+      --shadow: 0 14px 36px rgba(50, 42, 31, 0.09);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(70, 60, 48, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(70, 60, 48, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a { color: inherit; text-underline-offset: 3px; }
+    a:hover { color: var(--signal); }
+
+    .page {
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 42px 0 80px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+      font: 750 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 34px;
+      height: 3px;
+      background: var(--signal);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr);
+      gap: 28px;
+      align-items: stretch;
+      margin-bottom: 28px;
+    }
+
+    .hero-copy,
+    .status-card,
+    .panel {
+      background: color-mix(in srgb, var(--card) 94%, transparent);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-copy { padding: clamp(28px, 5vw, 64px); }
+
+    h1 {
+      margin: 0 0 18px;
+      max-width: 850px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(50px, 8.5vw, 112px);
+      font-weight: 500;
+      letter-spacing: -.055em;
+      line-height: .86;
+    }
+
+    h1 span { color: var(--signal); }
+
+    .lede {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(20px, 2.35vw, 31px);
+      line-height: 1.25;
+      letter-spacing: -.025em;
+    }
+
+    .plain {
+      max-width: 760px;
+      margin: 30px 0 0;
+      padding: 18px 20px;
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+      font-size: 17px;
+    }
+
+    .status-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 28px;
+      color: #fff;
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+
+    .status-label {
+      font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: #c8c8c3;
+    }
+
+    .status-card h2 {
+      margin: 15px 0 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 38px;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .status-card .big-number {
+      margin: 36px 0 4px;
+      color: #ff805d;
+      font: 800 clamp(72px, 10vw, 128px)/.8 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: -.09em;
+    }
+
+    .status-card p { margin: 0; color: #d7d7d2; }
+
+    .link-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .link-row a {
+      display: inline-block;
+      padding: 8px 11px;
+      border: 1px solid #60605d;
+      color: #fff;
+      font: 650 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-decoration: none;
+    }
+
+    .section { margin-top: 72px; }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+
+    .section-index {
+      color: var(--signal);
+      font: 800 13px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    h2.section-title {
+      margin: -7px 0 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(36px, 5vw, 62px);
+      font-weight: 500;
+      letter-spacing: -.04em;
+      line-height: 1;
+    }
+
+    .problem-grid,
+    .proof-grid,
+    .launch-grid,
+    .materials-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .problem-grid { grid-template-columns: repeat(3, 1fr); }
+    .proof-grid { grid-template-columns: repeat(4, 1fr); }
+    .launch-grid { grid-template-columns: repeat(5, 1fr); }
+    .materials-grid { grid-template-columns: 1fr 1fr; }
+
+    .panel { padding: 24px; }
+
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .panel p { margin: 0; color: var(--muted); }
+
+    .problem-grid .panel:nth-child(1) { border-top: 6px solid var(--warn); }
+    .problem-grid .panel:nth-child(2) { border-top: 6px solid var(--signal); }
+    .problem-grid .panel:nth-child(3) { border-top: 6px solid var(--safe); }
+
+    .flow {
+      overflow-x: auto;
+      padding: 30px 6px 12px;
+    }
+
+    .flow-track {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(130px, 1fr));
+      min-width: 980px;
+      gap: 22px;
+      align-items: center;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 116px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--card);
+      border: 1px solid var(--line);
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -19px;
+      top: 42px;
+      color: var(--signal);
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .flow-step strong { font-size: 16px; }
+    .flow-step span { color: var(--muted); font-size: 13px; }
+    .flow-step.risk { background: var(--warn-soft); border-color: #d5b77d; }
+    .flow-step.guard { background: var(--signal-soft); border-color: #da927a; }
+    .flow-step.safe { background: var(--safe-soft); border-color: #78b29f; }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 125px 1fr;
+      gap: 16px;
+      align-items: baseline;
+      padding: 15px 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .stack-row strong {
+      color: var(--blue);
+      font: 750 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-transform: uppercase;
+    }
+
+    .architecture .principle {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 100%;
+      padding: 34px;
+      color: white;
+      background: var(--blue);
+    }
+
+    .architecture blockquote {
+      margin: 0 0 20px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(27px, 3.6vw, 48px);
+      line-height: 1.08;
+      letter-spacing: -.03em;
+    }
+
+    .architecture cite { color: #d6e9ef; font-style: normal; }
+
+    .proof {
+      min-height: 180px;
+      padding: 22px;
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .proof .metric {
+      display: block;
+      margin-bottom: 14px;
+      color: #ff805d;
+      font: 800 42px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: -.06em;
+    }
+
+    .proof p { color: #cecec9; }
+
+    .checklist { list-style: none; margin: 16px 0 0; padding: 0; }
+    .checklist li { position: relative; padding: 9px 0 9px 30px; border-top: 1px solid var(--line); }
+    .checklist li::before { position: absolute; left: 0; font-weight: 900; }
+    .ready li::before { content: "✓"; color: var(--safe); }
+    .needed li::before { content: "→"; color: var(--signal); }
+
+    .launch-step {
+      min-height: 250px;
+      position: relative;
+      padding: 22px 18px 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+    }
+
+    .launch-step .num {
+      display: block;
+      margin-bottom: 42px;
+      color: var(--signal);
+      font: 800 38px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .launch-step h3 { margin: 0 0 10px; font-size: 16px; }
+    .launch-step p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .message-box {
+      padding: clamp(26px, 5vw, 52px);
+      color: #fff;
+      background: var(--signal);
+      border: 1px solid #a6371b;
+    }
+
+    .message-box .label {
+      font: 750 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      opacity: .8;
+    }
+
+    .message-box p {
+      max-width: 940px;
+      margin: 16px 0 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(26px, 4.2vw, 52px);
+      line-height: 1.12;
+      letter-spacing: -.035em;
+    }
+
+    .footnote {
+      margin-top: 44px;
+      color: var(--muted);
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    @media (max-width: 900px) {
+      .hero,
+      .architecture,
+      .materials-grid { grid-template-columns: 1fr; }
+      .problem-grid { grid-template-columns: 1fr; }
+      .proof-grid { grid-template-columns: repeat(2, 1fr); }
+      .launch-grid { grid-template-columns: repeat(2, 1fr); }
+      .section-head { grid-template-columns: 1fr; gap: 10px; }
+    }
+
+    @media (max-width: 560px) {
+      .page { width: min(100% - 22px, 1180px); padding-top: 16px; }
+      .hero-copy, .status-card, .panel { padding: 20px; }
+      .proof-grid, .launch-grid { grid-template-columns: 1fr; }
+      .status-card .big-number { font-size: 78px; }
+      .stack-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+
+    @media print {
+      body { background: white; }
+      .page { width: 100%; padding: 0; }
+      .hero-copy, .status-card, .panel, .proof { box-shadow: none; break-inside: avoid; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <section class="hero-copy">
+        <div class="eyebrow">Product &amp; launch brief · October 25, 2026</div>
+        <h1>Replay <span>Room</span></h1>
+        <p class="lede">A safety system for the moment a failed webhook needs to be sent again.</p>
+        <p class="plain"><strong>In simple words:</strong> Replay Room is a flight recorder and rehearsal room for webhooks. It shows what failed, tests the exact recovery safely, requires evidence before a risky replay, and preserves an audit trail afterward.</p>
+      </section>
+
+      <aside class="status-card">
+        <div>
+          <span class="status-label">Current launch state</span>
+          <h2>Strong product.<br />Release gap.</h2>
+          <div class="big-number">2</div>
+          <p>critical items remain: publish the npm package and release/deploy the newer code now on <code>main</code>.</p>
+        </div>
+        <nav class="link-row" aria-label="Public proof links">
+          <a href="https://replay-room-web.onrender.com">Live demo</a>
+          <a href="https://github.com/abhid1234/replay-room">GitHub</a>
+          <a href="https://huggingface.co/spaces/abhid1234/replay-room">HF drill</a>
+          <a href="https://github.com/abhid1234/replay-room/releases/tag/v0.3.0">v0.3.0</a>
+        </nav>
+      </aside>
+    </header>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">01 · Why it matters</div>
+        <h2 class="section-title">“Try it again” can charge someone twice.</h2>
+      </div>
+      <div class="problem-grid">
+        <article class="panel">
+          <h3>The queue knows it failed</h3>
+          <p>It often cannot tell whether the receiving system acted before the timeout, so a retry can duplicate a payment, shipment, or account change.</p>
+        </article>
+        <article class="panel">
+          <h3>Most tools make resend easy</h3>
+          <p>They do not prove that the payload and destination are unchanged, that a safe rehearsal passed, or that a second person approved a high-risk action.</p>
+        </article>
+        <article class="panel">
+          <h3>Replay Room makes proof the gate</h3>
+          <p>It binds the rehearsal, payload hash, target, operator identity, reason, risk acknowledgement, and approval into one explainable decision.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">02 · How it works</div>
+        <h2 class="section-title">From failed event to controlled recovery.</h2>
+      </div>
+      <div class="flow" aria-label="Replay Room event lifecycle">
+        <div class="flow-track">
+          <div class="flow-step"><strong>1. Receive</strong><span>Persist the original event before acknowledging it.</span></div>
+          <div class="flow-step"><strong>2. Deliver</strong><span>Send asynchronously with bounded retries.</span></div>
+          <div class="flow-step risk"><strong>3. Dead letter</strong><span>Keep the full attempt transcript when retries end.</span></div>
+          <div class="flow-step"><strong>4. Diagnose</strong><span>Explain outage, rate limit, contract, or network failure.</span></div>
+          <div class="flow-step"><strong>5. Rehearse</strong><span>Test the exact payload against a controlled destination.</span></div>
+          <div class="flow-step guard"><strong>6. Guard</strong><span>Check nine conditions and require dual control when risk is high.</span></div>
+          <div class="flow-step safe"><strong>7. Replay</strong><span>Send once through a durable intent and export signed evidence.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">03 · Architecture</div>
+        <h2 class="section-title">Render runs the product. Postgres remembers the truth.</h2>
+      </div>
+      <div class="architecture">
+        <div class="stack">
+          <div class="stack-row"><strong>Static site</strong><span>React operator console and interactive outage drill.</span></div>
+          <div class="stack-row"><strong>Web service</strong><span>Fastify API plus embedded BullMQ worker and reconciler on the free lab.</span></div>
+          <div class="stack-row"><strong>Postgres</strong><span>Durable events, delivery intents, attempts, rehearsals, approvals, and audit history.</span></div>
+          <div class="stack-row"><strong>Key Value</strong><span>Disposable queue transport, delayed retries, rate limits, and heartbeats.</span></div>
+          <div class="stack-row"><strong>Hugging Face</strong><span>Credential-free incident drill plus deterministic synthetic fixtures.</span></div>
+          <div class="stack-row"><strong>npm + GitHub</strong><span>Portable evidence verifier, schema, release tarball, SBOM, and provenance.</span></div>
+        </div>
+        <div class="principle">
+          <blockquote>Redis can disappear. The operator should still be able to reconstruct exactly what must happen next.</blockquote>
+          <cite>Design principle: durable intent before queue dispatch</cite>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">04 · Proof</div>
+        <h2 class="section-title">The demo is backed by real gates.</h2>
+      </div>
+      <div class="proof-grid">
+        <article class="proof"><span class="metric">96</span><strong>automated tests</strong><p>plus 9 deployment-smoke tests in the fresh local gate.</p></article>
+        <article class="proof"><span class="metric">21</span><strong>conformance cases</strong><p>6 incidents, 6 replay-risk cases, and 9 replay-guard cases.</p></article>
+        <article class="proof"><span class="metric">12</span><strong>required API paths</strong><p>verified live against the versioned OpenAPI contract.</p></article>
+        <article class="proof"><span class="metric">22s</span><strong>cold-start-aware proof</strong><p>Render API, Postgres, Key Value, console, CORS, and HF drill passed together.</p></article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">05 · Readiness</div>
+        <h2 class="section-title">Most launch ingredients exist. The release is not synchronized yet.</h2>
+      </div>
+      <div class="materials-grid">
+        <article class="panel">
+          <h3>Ready now</h3>
+          <ul class="checklist ready">
+            <li>Public GitHub repository with green Verify and CodeQL checks on current <code>main</code>.</li>
+            <li>Healthy Render API and operator console.</li>
+            <li>Credential-free Hugging Face outage drill and public fixture dataset.</li>
+            <li>GitHub release with tarball, CycloneDX SBOM, and signed attestations.</li>
+            <li>Long-form launch essay draft, deployment guide, interview walkthrough, and editable architecture diagram.</li>
+            <li>Fresh full local gate: typecheck, 96 tests, build, conformance, fixtures, Space build, and package smoke.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Finish before the public post</h3>
+          <ul class="checklist needed">
+            <li><strong>Cut a new release.</strong> Recommend <code>v0.4.0</code>: current <code>main</code> adds the dashboard snapshot API, adaptive polling, stale-request cancellation, and trusted HF publishing.</li>
+            <li><strong>Deploy the exact release SHA.</strong> Live Render/HF currently report <code>0.3.0</code> at <code>26c4cd6</code>, behind GitHub <code>main</code> at <code>5bc33ed</code>.</li>
+            <li><strong>Publish npm.</strong> The public registry currently returns <code>404</code> for <code>@avee1234/replay-room</code>.</li>
+            <li><strong>Refresh proof.</strong> Rerun the three-surface doctor and record the exact commit after deploy.</li>
+            <li><strong>Produce launch media.</strong> Hero screenshot/GIF, 1100×220 banner, and final X, LinkedIn, Show HN, Reddit, and Substack copy are not yet packaged.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-index">06 · Launch sequence</div>
+        <h2 class="section-title">One release train, then publish the story.</h2>
+      </div>
+      <div class="launch-grid">
+        <article class="launch-step"><span class="num">01</span><h3>Freeze &amp; version</h3><p>Declare the scope, bump every version surface to 0.4.0, update the changelog, and rebuild deterministic assets.</p></article>
+        <article class="launch-step"><span class="num">02</span><h3>Gate &amp; release</h3><p>Run the full verification suite, merge only green CI, create the GitHub release, tarball, SBOM, and attestations.</p></article>
+        <article class="launch-step"><span class="num">03</span><h3>Deploy exact SHA</h3><p>Render and Hugging Face must serve the reviewed release commit—not merely “latest main.”</p></article>
+        <article class="launch-step"><span class="num">04</span><h3>Publish &amp; prove</h3><p>Publish npm through trusted publishing, install from the registry, and run the public doctor across all surfaces.</p></article>
+        <article class="launch-step"><span class="num">05</span><h3>Tell the story</h3><p>Lead with duplicate-side-effect risk, show the rehearsal/guard flow, then link the live drill, source, npm package, and deep dive.</p></article>
+      </div>
+    </section>
+
+    <section class="section message-box">
+      <div class="label">Recommended one-sentence pitch</div>
+      <p>Replay Room turns a failed webhook from a blind resend into a rehearsed, evidence-backed production change.</p>
+    </section>
+
+    <p class="footnote">Evidence checked October 25, 2026 PT. Public live smoke passed against Render and Hugging Face; GitHub <code>main</code> was <code>5bc33ed</code>; the live deployment reported <code>0.3.0</code>/<code>26c4cd6</code>; npm returned <code>E404</code>. This brief is a launch decision aid, not a claim that the remaining release steps have completed.</p>
+  </main>
+</body>
+</html>
