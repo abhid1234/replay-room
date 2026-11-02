@@ -102,7 +102,7 @@ export const openApiDocument = {
     "/api/events/{eventId}": { get: operatorEventGet("Read an incident transcript and deterministic diagnosis", "getEvent", "EventDetail") },
     "/api/events/{eventId}/evidence": { get: operatorEventGet("Download a signed incident evidence bundle", "getEvidence", "EvidenceBundle") },
     "/api/events/{eventId}/rehearse": {
-      post: operatorAction("Queue a rehearsal against a controlled destination", "rehearseEvent", "RehearsalRequest", "Rehearsal queued"),
+      post: operatorAction("Queue a rehearsal to the destination the replay will use; high-risk events require acknowledgeRisk", "rehearseEvent", "RehearsalRequest", "Rehearsal queued"),
     },
     "/api/events/{eventId}/replay/preflight": {
       post: operatorPreflight(),
@@ -167,7 +167,7 @@ export const openApiDocument = {
         reliability: { $ref: "#/components/schemas/EndpointReliabilityList" },
         system: { $ref: "#/components/schemas/SystemSnapshot" },
       }),
-      RehearsalRequest: object(["destinationUrl"], { destinationUrl: uri, notes: { type: "string", maxLength: 500 } }),
+      RehearsalRequest: object(["destinationUrl"], { destinationUrl: uri, notes: { type: "string", maxLength: 500 }, acknowledgeRisk: { type: "boolean", default: false } }),
       ReplayRequest: object(["destinationUrl", "reason"], {
         destinationUrl: uri,
         reason: { type: "string", minLength: 10, maxLength: 500 },

@@ -60,6 +60,10 @@ A rehearsal sends the original payload with `x-replay-room-mode: rehearsal` to a
 
 Production replay requires a passing record with the same payload digest and destination. This intentionally makes target changes force a new rehearsal.
 
+Because the replay may only go to the rehearsed URL, a rehearsal reaches the same receiver the replay will. A receiver that honors `x-replay-room-mode: rehearsal` can treat it as a dry run; one that ignores the header processes it like any other delivery. For that reason a high-risk event can only be rehearsed with the same explicit `acknowledgeRisk` the replay requires; without it the API returns `409` and records `rehearsal.blocked` in the audit log.
+
+A replay that gets no HTTP response is not retried. The receiver may already have acted, so the event returns to dead letter with the no-response attempt recorded, which rates any further replay high risk. Replays that get a retryable HTTP status (`429` or `5xx`) still retry within the endpoint's attempt budget.
+
 The API evaluates the newest rehearsal, not the newest passing rehearsal. A failed check after an earlier success therefore closes the replay gate until a new rehearsal passes. `POST /api/events/:id/replay/preflight` returns the complete nine-condition decision trace without writing audit rows, creating delivery intents, or enqueueing jobs. The console invalidates that trace whenever the target, reason, risk acknowledgement, or operator identity changes; the mutation endpoint always reevaluates the guard server-side before approving a replay.
 
 ## Duplicate-side-effect risk
