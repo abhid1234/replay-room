@@ -90,9 +90,7 @@ The outage drill on the landing page and on Hugging Face is a labeled simulation
 
 `@avee1234/replay-room` packages the portable parts: the `replay-room.evidence/v1` schema and TypeScript types, the evidence verifier CLI (`inspect` and `verify`), the synthetic fixtures, and the `doctor` command that checks a deployment's API, console, CORS policy, and demo boundary. Its public API and CLI cover the portable parts. The tarball also contains the compiled server, but installing the package is not a supported way to run Replay Room.
 
-As of 2026-10-26 the package is not on npm: `npm view @avee1234/replay-room` returned `E404`. The exact tarball is attached to each GitHub release with a CycloneDX SBOM and provenance attestations. Once the registry readback passes, replace the next line with the npm line from [link-map.md](link-map.md); otherwise delete it.
-
-[[NPM_LINE]]
+As of 2026-11-02 the package is not on npm: `npm view @avee1234/replay-room` returns `E404`. The exact tarball is attached to each GitHub release with a CycloneDX SBOM and provenance attestations.
 
 ### 21. What is on Hugging Face?
 

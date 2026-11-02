@@ -2,7 +2,7 @@
 
 Two variants. Both follow the same arc: problem, insight, product, proof, and a request for feedback. Post one; the other works as a follow-up a week later. LinkedIn shows roughly the first 210 characters before "see more", so the opening lines carry the post.
 
-Attach one image: the hero GIF or a live-product screenshot from [media-plan.md](media-plan.md) once captured, otherwise the architecture diagram (`diagrams/replay-room-render-architecture.png`) with the alt text from the media plan.
+Attach the demo video, [`assets/replay-room-demo.mp4`](assets/replay-room-demo.mp4) (2:05, captioned, so it works muted), and set [`assets/replay-room-demo-cover.png`](assets/replay-room-demo-cover.png) as its thumbnail. For an image instead, use the hero GIF or the architecture diagram, with the alt text from [media-plan.md](media-plan.md).
 
 ## Variant 1: the 2 a.m. question
 
@@ -23,7 +23,6 @@ If you operate webhooks or dead-letter queues, I'd like to hear what's missing.
 
 Try the drill: https://replay-room-web.onrender.com/?utm_source=linkedin&utm_medium=social&utm_campaign=replay-room-launch&utm_content=linkedin-variant-1
 Source: https://github.com/abhid1234/replay-room?utm_source=linkedin&utm_medium=social&utm_campaign=replay-room-launch&utm_content=linkedin-variant-1
-[[NPM_LINE]]
 ```
 
 ## Variant 2: what a timeout doesn't prove
@@ -47,12 +46,13 @@ It's open source and early: the public deployment is an evaluation setup on free
 
 Drill: https://replay-room-web.onrender.com/?utm_source=linkedin&utm_medium=social&utm_campaign=replay-room-launch&utm_content=linkedin-variant-2
 Code: https://github.com/abhid1234/replay-room?utm_source=linkedin&utm_medium=social&utm_campaign=replay-room-launch&utm_content=linkedin-variant-2
-[[NPM_LINE]]
 ```
 
 ## Before posting
 
-- Resolve or delete the `[[NPM_LINE]]` line using [link-map.md](link-map.md).
+- Restore the live API first; see [README.md](README.md#restore-the-api).
+- Tag the platforms it is built on, as credit rather than comparison: Render (static site, web service, Postgres, Key Value) and Hugging Face (the drill and the dataset). Type @ and pick each company page from LinkedIn's list.
+- Do not add an npm line. The package is not on npm yet.
 - Re-verify "96 automated tests and 21 conformance checks" against the latest `main` run; see [README.md](README.md#claims-that-need-fresh-verification).
 - Put links in the post body, not the first comment. The post is short enough that the link does not bury the hook.
 - Answer comments within the first two hours. Use [faq.md](faq.md) for the substance, in your own words.

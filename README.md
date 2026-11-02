@@ -3,7 +3,7 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
-[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [Product & launch brief](launch-replay-room.html) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
+[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
 
 **Rehearse a failed webhook before you replay it.**
 
@@ -84,7 +84,7 @@ The root [render.yaml](render.yaml) creates the free lab topology as one Bluepri
 | Postgres | Durable event, delivery-intent, attempt, rehearsal, and audit ledger |
 | Key Value | Disposable BullMQ transport, delayed retries, heartbeats, and rate limits |
 
-The free topology is honest about its constraints: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
+The free topology shows its constraints instead of hiding them: the web service spins down after inactivity, Postgres expires after 30 days, and free Key Value is in-memory. Those failure modes are visible in the live fabric panel. For production, split `npm run start:worker` and `npm run start:cron` into dedicated paid resources so delivery processing is independent of HTTP traffic. See [docs/DEPLOYING.md](docs/DEPLOYING.md) for the upgrade path and cost guardrails.
 
 ## The guarded replay invariant
 
@@ -96,6 +96,7 @@ A replay is accepted only when all of these are true:
 4. The event payload hash still matches the rehearsed hash.
 5. The production replay destination exactly matches the rehearsed destination.
 6. If prior receiver acceptance is ambiguous or no idempotency key exists, the operator explicitly acknowledges the duplicate-side-effect risk.
+7. For a high-risk replay, a different operator holds an unexpired approval bound to the same rehearsal, payload, and destination.
 
 Every approval and rejection records the risk level and acknowledgement in the audit log. A replay intent is keyed to the passing rehearsal, so repeated approval clicks return the same durable intent instead of sending the event twice. Each replay cycle starts its own bounded retry budget while the cumulative attempt transcript remains intact.
 
@@ -109,11 +110,14 @@ Prerequisites: Node.js 22+, Docker, and Docker Compose.
 
 ```bash
 cp .env.example .env
+set -a; . ./.env; set +a
 docker compose up -d
 npm install
 npm run db:migrate
 npm run db:seed
 ```
+
+Nothing loads `.env` automatically, so the `set -a` line exports its variables into the current shell. Run it again in each new terminal.
 
 Run the three processes in separate terminals:
 
@@ -125,9 +129,11 @@ npm run dev:web
 
 Open `http://localhost:5173`, enter the `ADMIN_TOKEN` from `.env`, and create an endpoint. For local failure testing, use one of the built-in development sinks:
 
-- `http://localhost:4000/demo/sink/accept`
-- `http://localhost:4000/demo/sink/retry`
-- `http://localhost:4000/demo/sink/reject`
+- `http://127.0.0.1:4000/demo/sink/accept`
+- `http://127.0.0.1:4000/demo/sink/retry`
+- `http://127.0.0.1:4000/demo/sink/reject`
+
+Use `127.0.0.1` rather than `localhost` for destinations. The delivery client resolves hostnames with direct DNS queries, which do not read `/etc/hosts`, so `localhost` fails on machines whose DNS server does not answer for it.
 
 Send an event:
 
@@ -197,7 +203,7 @@ npm run smoke:live -- \
   --space https://YOUR-SPACE.static.hf.space
 ```
 
-After the npm package is published, consumers can run the identical check with `npx @avee1234/replay-room doctor -- ...`. The command emits a `replay-room.live-check/v1` JSON result that can be attached to a launch review, deployment record, or incident handoff.
+After the npm package is published, consumers can run the identical check with `npx @avee1234/replay-room doctor --api … --site … --space …`. Leave out a `--` separator: npx passes it through, and the CLI rejects it. The command emits a `replay-room.live-check/v1` JSON result that can be attached to a launch review, deployment record, or incident handoff.
 
 Each deployment also exposes `/.well-known/replay-room`: a cacheable launch manifest that binds the API version to its Render commit, console origin, public proof surfaces, capabilities, and safety posture without exposing operator credentials or incident data. `doctor` verifies this manifest rather than trusting a green deployment badge.
 

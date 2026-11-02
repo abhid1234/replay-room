@@ -2,7 +2,7 @@
 
 Three standalone options. Post one; keep the others for follow-ups on later days. Each leads with the replay risk, fits in one post, and carries a UTM link from [link-map.md](link-map.md). X counts every link as 23 characters; the counts below use that rule.
 
-Attach the hero GIF or the 60-second demo from [demo-script.md](demo-script.md) once it has been captured from the live product. Until then, attach the architecture diagram (`diagrams/replay-room-render-architecture.png`) or nothing.
+Attach [`assets/hero-drill-to-guard.mp4`](assets/hero-drill-to-guard.mp4) (14 seconds) or the full demo, [`assets/replay-room-demo.mp4`](assets/replay-room-demo.mp4) (2:05). Both are captioned, so they work muted. X also accepts the GIF version, [`assets/hero-drill-to-guard.gif`](assets/hero-drill-to-guard.gif).
 
 ## Option A: the double charge
 
@@ -61,5 +61,5 @@ Length: 203 of 280.
 - No hashtags. They read as marketing and the posts do not need them.
 - If you tag Render, do it only in Option C, and confirm the handle from the footer of render.com first; this kit does not assume one.
 - Reply to technical questions with links to [faq.md](faq.md) answers, rewritten in your own words.
-- Do not post an npm install line until `[[NPM_LINE]]` has been resolved in [link-map.md](link-map.md).
+- Do not add an npm install line. The package is not on npm yet; see [link-map.md](link-map.md).
 - Do not link the API endpoints (`/health`, `/openapi.json`, `/.well-known/replay-room`) in a post that might spread. They share the operator rate limit, possibly across all visitors; see blocker B10 in [README.md](README.md#blockers).

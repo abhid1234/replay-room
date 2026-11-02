@@ -6,7 +6,7 @@ Nothing in this checklist has been done yet. As of 2026-10-26 the public surface
 
 ## 0. Platform expiry check (do this first)
 
-- [ ] In the Render dashboard, open `replay-room-db` and read its expiry date. The free Blueprint went live on 2026-09-28, and free Render Postgres expires 30 days after creation, so this database probably expires on or about **2026-10-28**. After expiry the API's `/health` fails and the live console stops working.
+- [ ] In the Render dashboard, open `replay-room-db` and read its expiry date. The free Blueprint went live on 2026-09-28, and free Render Postgres expires 30 days after creation, so this database probably expired on or about **2026-10-28**. The API has been down since 2026-10-29: it runs migrations before it listens, so without a database it cannot start. [README.md](README.md#restore-the-api) has the recovery steps.
 - [ ] If the expiry date is before launch day plus two weeks, either upgrade the database to a paid plan, or delete it and create a new free one (a workspace can have only one free Postgres database), then redeploy. The data is synthetic demo data, so recreating is acceptable, but it starts a new 30-day clock.
 - [ ] Record the new expiry date in [README.md](README.md#current-readiness).
 
