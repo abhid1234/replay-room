@@ -13,7 +13,6 @@ AgentRoute is the benchmark for launch completeness: product, public proof, pack
 | Fixtures | Synthetic incident corpus, conformance runner, and [Hugging Face dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures) | Public at dataset commit `fc5a295`; the anonymous `0.2.0` manifest readback matches SHA-256 `56a8561…c2c92` | Public dataset mirror with byte-for-byte readback verification |
 | Schema | `replay-room.evidence/v1` Zod and JSON Schema contracts | Implemented | Valid, malformed, and tampered conformance cases |
 | Security | HMAC evidence, DNS-pinned no-redirect egress, redaction, CodeQL, dependency audit | Implemented; external egress policy remains a production defense-in-depth step | Clean automated gates and release review |
-| Launch essay | `docs/LAUNCH.md` | Draft complete; not published | Reviewed public essay linked from repository |
 
 ## Release invariant
 
