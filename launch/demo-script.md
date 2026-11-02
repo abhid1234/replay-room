@@ -2,6 +2,8 @@
 
 Three cuts of the same story: 60 seconds, 3 minutes, and an 8-minute technical walkthrough. Bold labels are the console's visible text, taken from `web/src/App.tsx` and `web/src/IncidentDrill.tsx`; that text is the same in the deployed `0.3.0` console and on `main`.
 
+A 2:05 captioned recording of the 3-minute and 8-minute flows already exists: [assets/replay-room-demo.mp4](assets/replay-room-demo.mp4), made on a local run of the deployed `0.3.0` release and labeled that way. [video/README.md](video/README.md) explains how it was made. Use the scripts below for live recordings against the restored deployment.
+
 Two rules apply to every recording:
 
 1. **Never show a secret.** The admin token field is masked, but do not paste it on camera. Blur every ingest URL: the `Endpoint created. Send webhooks to …/ingest/<key>` message and the Ingest workbench card both show the full capability URL. Never show Render environment pages.
