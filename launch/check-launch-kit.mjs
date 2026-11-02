@@ -32,6 +32,8 @@ const ALLOWED_HOSTS = new Set([
   "replay-room-web.onrender.com", "replay-room-api.onrender.com", "github.com", "huggingface.co",
   "abhid1234-replay-room.static.hf.space", "www.npmjs.com", "httpbin.org", "cyclonedx.org",
 ]);
+// Loopback URLs belong in local recording instructions, never in post copy.
+const LOOPBACK = /^(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 const markdown = readdirSync(here, { recursive: true })
   .filter((file) => file.endsWith(".md"))
@@ -94,7 +96,8 @@ for (const file of POSTS) {
 for (const { file, text } of markdown) {
   for (const match of text.matchAll(/https?:\/\/[^\s)>`"'\]]+/g)) {
     const host = new URL(match[0]).host;
-    if (!ALLOWED_HOSTS.has(host)) errors.push(`${file}:${lineOf(text, match.index)}: unexpected link host ${host}`);
+    if (ALLOWED_HOSTS.has(host) || (LOOPBACK.test(host) && !POSTS.includes(file))) continue;
+    errors.push(`${file}:${lineOf(text, match.index)}: unexpected link host ${host}`);
   }
   for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
     const target = match[1];

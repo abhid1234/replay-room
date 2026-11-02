@@ -36,7 +36,7 @@ The first release, `0.1.0`, shipped on 2026-09-27. Two-person approval for high-
 
 ## Verified proof points
 
-Each point was read back on the date shown. Re-verify before quoting; see [README.md](README.md#claims-that-need-fresh-verification).
+Each point was read back on the date shown. Re-verify before quoting; see [README.md](README.md#claims-that-need-fresh-verification). The two live-API rows were true on 2026-10-26, but the API has been down since 2026-10-29 (blocker B1 in [README.md](README.md#blockers)). Quote them again only after it is restored.
 
 | Proof point | Evidence | Verified |
 |---|---|---|
@@ -62,7 +62,7 @@ Do not quote these as current until the release train in [release-checklist.md](
 
 ## Contact
 
-[[CONTACT]]
+Open an issue: <https://github.com/abhid1234/replay-room/issues>
 
 Source and issues: <https://github.com/abhid1234/replay-room>
 
@@ -74,9 +74,9 @@ Source and issues: <https://github.com/abhid1234/replay-room>
 | Social banner, 1100×220 | `launch/assets/social-banner-1100x220.png` (source: `social-banner.html`) | Ready |
 | Architecture diagram | `diagrams/replay-room-render-architecture.png` and `.svg` | Ready |
 | Architecture diagram, editable | `diagrams/replay-room-render-architecture.excalidraw` and `.mmd` | Ready |
-| Product screenshots S01–S12 | `launch/assets/s01-…` to `s12-…` | Must capture from the live product; see [media-plan.md](media-plan.md) |
-| Hero GIF and MP4 | `launch/assets/hero-drill-to-guard.gif` and `.mp4` | Must capture |
-| Demo video | `[[DEMO_VIDEO_URL]]` | Must record; see [demo-script.md](demo-script.md) |
-| Product Hunt gallery | `launch/assets/ph-01-og.png` to `ph-05-live-fabric.png` | Slide 1 can be made from the Open Graph image; the rest must be captured |
+| Product screenshots | `launch/assets/s01-landing.png`, `s02-drill-complete.png`, and `s04-…` to `s08-…` | Ready: recorded on a local run of the deployed `0.3.0` release. S03 and S09–S12 must be captured from the live product; see [media-plan.md](media-plan.md) |
+| Hero GIF and MP4 | `launch/assets/hero-drill-to-guard.gif` and `.mp4` | Ready |
+| Demo video | `launch/assets/replay-room-demo.mp4` (2:05), with the cover `replay-room-demo-cover.png` | Ready |
+| Product Hunt gallery | `launch/assets/ph-01-og.png` to `ph-05-live-fabric.png` | Can be made from the Open Graph image, S02, S04, and S08; slide 5 needs the live S03 |
 
 Image alt text for every asset is in [media-plan.md](media-plan.md).

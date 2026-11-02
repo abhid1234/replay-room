@@ -1,6 +1,6 @@
 # Substack launch essay
 
-Adapted from [docs/LAUNCH.md](../docs/LAUNCH.md) for a general engineering audience. Body length is about 1,190 words. Replace every `[[...]]` marker before publishing, including the image markers, which tell you where to insert each image.
+Adapted from [docs/LAUNCH.md](../docs/LAUNCH.md) for a general engineering audience. Body length is about 1,190 words. Paste it from the launch kit page, which copies the architecture diagram with it, or insert [`../diagrams/replay-room-render-architecture.png`](../diagrams/replay-room-render-architecture.png) by hand under the Render heading. Optionally, add [`assets/replay-room-demo.mp4`](assets/replay-room-demo.mp4) with Substack's video button after the opening section.
 
 ---
 
@@ -56,7 +56,7 @@ After the replay, the whole incident exports as a versioned JSON bundle: event i
 
 ## Built on Render, constraints included
 
-[[IMAGE: diagrams/replay-room-render-architecture.png, with the architecture alt text from launch/media-plan.md]]
+![Replay Room on Render: a static site serves the console, a web service runs the API with the worker and reconciler, Postgres is the durable ledger, and Key Value carries the queue](../diagrams/replay-room-render-architecture.png)
 
 Replay Room runs on four Render primitives. A static site serves the React console. A web service runs the Fastify API, and on the free plan it also embeds the BullMQ worker and a ten-minute reconciler, because Render has no free background-worker or cron compute. Render Postgres holds the events, delivery intents, attempts, rehearsals, approvals, and audit records. Render Key Value is the queue transport.
 
@@ -71,7 +71,6 @@ Delivery is at-least-once. Replay Room doesn't make duplicate side effects impos
 - **The outage drill:** a labeled simulation of one event surviving an outage, at <https://replay-room-web.onrender.com/?utm_source=substack&utm_medium=newsletter&utm_campaign=replay-room-launch&utm_content=essay>. It's also on [Hugging Face](https://huggingface.co/spaces/abhid1234/replay-room?utm_source=substack&utm_medium=newsletter&utm_campaign=replay-room-launch&utm_content=essay). The live console behind it needs a deployment's admin token.
 - **The source:** MIT licensed, with a Render Blueprint (`render.yaml`) and a Docker Compose setup, at <https://github.com/abhid1234/replay-room?utm_source=substack&utm_medium=newsletter&utm_campaign=replay-room-launch&utm_content=essay>.
 - **The release:** the package tarball and a CycloneDX SBOM, with provenance attestations recorded by GitHub, at <https://github.com/abhid1234/replay-room/releases/latest>.
-- [[NPM_LINE]]
 - **The fixtures:** synthetic incident cases on [Hugging Face](https://huggingface.co/datasets/abhid1234/replay-room-fixtures).
 
 I'd like to hear from anyone who has had to decide whether to press that button. Which checks are missing? Which would you drop? And would you trust two-person approval before per-user authentication exists?

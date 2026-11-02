@@ -50,7 +50,6 @@ Known limitations:
 - It's single-tenant, early, and has no production users. The public deployment is for evaluation.
 
 CI runs 96 automated tests, 9 deployment-smoke tests, and 21 conformance checks, plus integration tests against real Postgres 17 and Redis 8. Releases carry the package tarball and a CycloneDX SBOM, with SLSA provenance and SBOM attestations in GitHub's attestation store.
-[[NPM_LINE]]
 
 Questions I'd value answers to:
 
@@ -66,9 +65,9 @@ Architecture: https://github.com/abhid1234/replay-room/blob/main/docs/ARCHITECTU
 
 ## Before submitting
 
-- Resolve `[[NPM_LINE]]`: delete the line unless the registry readback passes, in which case use the npm line from [link-map.md](link-map.md).
+- Restore the live API first; see [README.md](README.md#restore-the-api). The npm line was removed because the package is not published; add one only after `npm view @avee1234/replay-room version` prints a version.
 - Wake the API about ten minutes beforehand by opening <https://replay-room-api.onrender.com/health>, so the first commenters do not hit a cold start.
-- Post between 8 and 10 a.m. US Pacific, Tuesday to Thursday, and stay in the thread for the first three hours.
+- Post between 8 and 10 a.m. US Pacific on a weekday, and stay in the thread for the first three hours. Tuesday to Thursday draw the most readers; Monday works.
 - Answer criticism of the limitations directly and briefly. Do not argue with "just use idempotency keys"; agree, and explain that the console exists for receivers that do not have them. See [faq.md](faq.md).
 - Do not ask anyone to upvote. Hacker News penalizes coordinated voting.
 - If the comment is rejected for length, keep the opening, the first five "How it works" bullets, the real-versus-simulated paragraph, the limitations, and the questions.

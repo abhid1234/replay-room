@@ -1,68 +1,74 @@
 # Replay Room launch kit
 
-Everything needed to announce Replay Room, checked against the repository and the live surfaces on **2026-10-26**. Nothing here has been posted, published, deployed, or released. Those steps are listed in [release-checklist.md](release-checklist.md) and need your explicit go-ahead.
+Everything needed to announce Replay Room, checked against the repository and the live surfaces on **2026-11-02** (UTC), the evening of Sunday 2026-11-01 in Pacific time. Nothing here has been posted, published, deployed, or released. Those steps need your explicit go-ahead.
 
 > Replay Room turns a failed webhook from a blind resend into a rehearsed, evidence-backed production change.
 
 ## Current readiness
 
-**Not ready to post.** The copy is ready, but the public surfaces still serve older releases than `main`, the npm package is unpublished, and the free database may expire inside the launch window. Finish the release train first.
+**Ready to post once the live API is back.** The copy, demo video, and images are final for a launch on the deployed `0.3.0` release without npm. The live API has been down since 2026-10-29, most likely because the free Render Postgres expired (B1). Restore it before posting: the repository README links its health, OpenAPI, and launch-proof URLs, and the Hugging Face drill links its OpenAPI contract. The release train to `v0.4.0` (B2–B5) is no longer a launch prerequisite, because no post mentions `0.4.0` or npm.
 
-### Verified state on 2026-10-26
+### Verified state on 2026-11-02
 
 | Surface | State | How it was verified |
 |---|---|---|
-| `main` | Commit `5bd5af0`. `verify` (quality, production-audit, managed-services, container) and CodeQL are green | GitHub Actions runs on that commit |
-| Unit and API tests | 96 passed in CI; 7 integration tests pass in the separate Postgres 17 and Redis 8 job | CI log for `5bd5af0`. A local rerun passed 95 of 96; the remaining test needs IPv6 loopback, which the audit sandbox lacks |
-| Deployment-smoke tests | 9 of 9 | CI log and a local `npm run test:smoke` |
-| Conformance | 21 checks across 15 fixtures: 6 incident diagnoses, 6 replay-risk ratings, 9 replay-guard cases | CI log and a local `npm run conformance` |
-| Builds and package | Production build, fixtures check, Space build (`credentialSurface: none`), and package check (7 version surfaces, 107 files, 101,921 bytes, clean-install smoke) pass | CI log and a local rerun |
-| Render API | `/health` `ok`; launch proof `0.3.0` at commit `26c4cd6`, topology `embedded-free` | Live readback at 03:30 UTC |
-| Render console | Live; serves the console built from the `0.3.0` source | Its bundle `index-BnJwpKZq.js` exists; `main`'s `index-C0_XG9Uy.js` does not |
-| Three-surface smoke | Passed: 12 required API paths, CORS, console, and the credential-free Space, with a 12.5-second cold start | Scheduled `live deployment smoke` (cron 15:23 UTC; GitHub started it at 18:27 UTC on 2026-10-25) |
-| Hugging Face Space | Running; serves the **`v0.1.2`** build | Its script `index-BMQjeDzn.js` matches a rebuild of commit `af3592b`; `0.2.0` and `0.3.0` builds produce other hashes |
-| Hugging Face dataset | Public; manifest **`0.2.0`**: 6 incidents and 7 replay-guard records | Anonymous manifest readback. The repository corpus is `0.3.0` with 9 |
-| GitHub release | `v0.3.0` from `26c4cd6`, with tarball, SBOM, SLSA provenance, and SBOM attestations | Releases API and attestations API |
-| `v0.4.0` | Does not exist | The tag URL returns 404 |
+| `main` | Commit `dea98d6`: the `5bd5af0` product code plus this kit. `verify` (quality, production-audit, managed-services, container) and CodeQL are green | GitHub Actions runs on that commit |
+| Local gate on `dea98d6` | Typecheck, build, 9 of 9 deployment-smoke tests, 21 conformance checks (6/6/9 across 15 fixtures), fixtures check, Space build, and package check (7 version surfaces, 107 files, 101,921 bytes, clean-install smoke) pass; with this change's README fixes the package is 102,148 bytes. The 7 integration tests pass against Postgres 16 and Redis 7. `npm audit --omit=dev --audit-level=high` finds 0 vulnerabilities | Local run on 2026-11-02. Unit tests pass 95 of 96 locally; the remaining test needs IPv6 loopback, which the sandbox lacks, and CI passes all 96 |
+| Render API | **Down.** `/health` and `/.well-known/replay-room` return 503 | Readback at 02:40 UTC |
+| Three-surface smoke | **Failing since 2026-10-29**: "/health did not become ready within 120000ms". Last pass 2026-10-28 at 20:22 UTC | Scheduled `live deployment smoke` runs on 2026-10-29, 10-30, 10-31, and 11-01 |
+| Render console | Up. The landing page and the outage drill load; the drill runs entirely in the browser | Readback. Its `0.3.0` bundle was confirmed by hash on 2026-10-26 |
+| Hugging Face Space | Running; serves the `v0.1.2` build | Bundle-hash comparison on 2026-10-26 |
+| Hugging Face dataset | Public; manifest `0.2.0`: 6 incidents and 7 replay-guard records | Readback. The repository corpus is `0.3.0` with 9 |
+| GitHub release | `v0.3.0` from `26c4cd6` is the latest, with tarball, SBOM, SLSA provenance, and SBOM attestations. `v0.4.0` does not exist | Releases API |
 | npm | **Not published** | `npm view @avee1234/replay-room` returns `E404` |
-| Hugging Face trusted publishing | Never run | The workflow has zero runs |
+| Dependency updates | Six open Dependabot pull requests (#38–#43) | Not needed for the launch; review after it |
 
 ### Blockers
 
-| # | Blocker | Why it matters | Resolution |
+| # | Blocker | Why it matters | Status |
 |---|---|---|---|
-| B1 | The free Render Postgres probably expires on or about **2026-10-28** (30 days after the 2026-09-28 Blueprint launch) | `/health` and the live console fail once the database expires | [Release checklist](release-checklist.md#0-platform-expiry-check-do-this-first), step 0 |
-| B2 | `main` contains unreleased product changes but still declares `0.3.0` | `main`'s OpenAPI says `0.3.0` yet includes `/api/dashboard`, which the deployed `0.3.0` lacks: two contracts claim one version | Cut `v0.4.0` (steps 1–6) |
-| B3 | Deploy-order hazard | The `0.4.0` console polls only `/api/dashboard`; deploying the console before the API breaks the authenticated console | Deploy the API first (step 7) |
-| B4 | The Hugging Face Space serves a `v0.1.2` build and the dataset is `0.2.0` | The public drill is two releases behind and the dataset one; the dataset lacks the two dual-control cases (`high-risk-missing-approval-blocks` and `high-risk-distinct-operator-allows-replay`) | Publish `0.4.0` (step 9) |
-| B5 | The npm package is unpublished | Any npm install line in the copy would be false | Trusted publishing, then registry readback (step 8) |
-| B6 | The README's `doctor -- ...` command fails | npx passes the `--` through, and the CLI rejects it with `"error": "-- requires a value"` | Fix in the release PR (step 1) |
-| B7 | No product screenshots, GIF, or video exist | Posts and the Product Hunt gallery need captured media | Capture after deploy ([media-plan.md](media-plan.md)) |
-| B8 | The essay is not published, and the press contact is undecided | `[[SUBSTACK_URL]]` and `[[CONTACT]]` remain | Publish the essay, then choose a contact |
-| B9 | The repository README, which every post links to, needs three fixes: line 87 uses a word this kit deliberately avoids ("… about its constraints"); line 6 links the internal `launch-replay-room.html` brief; and the Quick start runs `npm run db:migrate` without exporting `.env`, which fails because nothing loads it | It is the landing page for Show HN and the posts, and it ships in the npm tarball | Decide and fix in the release PR (step 1) |
-| B10 | The 300-per-minute operator rate limit covers every non-ingest route, including `/health`, `/openapi.json`, and `/.well-known/replay-room`, and Fastify runs without `trustProxy` | Behind Render's proxy, visitors may share one budget, so launch traffic to those URLs could return 429 to everyone, including your own console | Verify the keying on the live service. This kit already keeps API URLs out of the posts; a fix such as `trustProxy` or exempting public read routes is a product change for the release PR |
+| B1 | **The live API is down.** The free Render Postgres was due to expire around 2026-10-28, and the daily smoke has failed since 2026-10-29. The API runs migrations before it listens (`src/api/server.ts`), so without a database it cannot start | Every API URL returns 503, including the README's health, OpenAPI, and launch-proof links | **Open. Fix before posting:** see [Restore the API](#restore-the-api) |
+| B2 | `main` contains unreleased product changes but still declares `0.3.0` | `main`'s OpenAPI and README describe `/api/dashboard` and adaptive polling, which the deployed `0.3.0` lacks | Open. Cut `v0.4.0` after the launch; no post depends on it |
+| B3 | Deploy-order hazard | A console built from `main` polls only `/api/dashboard`, which the `0.3.0` API lacks | Open. Only matters when a newer console deploys; keep the console on `0.3.0` until the API is newer |
+| B4 | The Hugging Face Space serves a `v0.1.2` build and the dataset is `0.2.0` | The public drill and dataset trail the repository | Open. Not launch-blocking; the drill works |
+| B5 | The npm package is unpublished | An npm line in the copy would be false | **Resolved in the copy:** every `[[NPM_LINE]]` was deleted, as [link-map.md](link-map.md) prescribes while npm returns `E404` |
+| B6 | The README's `doctor -- ...` command failed | npx passes the `--` through, and the CLI rejects it | **Fixed** in the README on 2026-11-02 |
+| B7 | No product media existed | Posts need a video and images | **Resolved:** demo video, hero GIF and MP4, cover frame, and seven screenshots are in [assets/](assets/README.md). They were recorded on a local run of the deployed `0.3.0` release and are labeled that way. The live-only shots (S03, S09–S12) wait for the restored API |
+| B8 | Press contact undecided | `[[CONTACT]]` remained | **Resolved:** GitHub issues, until you choose an address |
+| B9 | The repository README needed fixes | It is the landing page for every post | **Fixed** on 2026-11-02: the banned word on line 87, the internal brief link on line 6, the Quick start's missing `.env` export, and a fourth found today: the local demo receivers used `localhost`, which the delivery client's direct DNS lookup cannot resolve, so they now use `127.0.0.1`. The guarded-replay list also gained its missing two-person rule |
+| B10 | The 300-per-minute operator rate limit covers `/health`, `/openapi.json`, and `/.well-known/replay-room`, and Fastify runs without `trustProxy` | Behind Render's proxy, visitors may share one budget | Open; a product change. The posts keep API URLs out |
 
-Not a blocker, but worth knowing: the static console exposes no commit marker, so its deployed version can only be confirmed from the Render dashboard or by comparing bundle hashes.
+### Restore the API
+
+About 15 minutes in the Render dashboard:
+
+1. Open `replay-room-db`. If it shows as expired or suspended, either upgrade it to a paid instance type, which keeps the data, or delete it and create a new free database named `replay-room-db` (a workspace can have only one free Postgres database). The data is synthetic demo data, and a new free database starts a new 30-day clock; set a reminder for its expiry.
+2. Make sure `replay-room-api`'s `DATABASE_URL` points at the database. A Blueprint sync rewires it from `render.yaml`; otherwise paste the new internal connection string.
+3. Redeploy only the API. Prefer **Manual Deploy → Deploy a specific commit → `26c4cd6`** so the live version stays `0.3.0`. Leave the console alone: it already serves `0.3.0`, and a console built from `main` would need a newer API.
+4. Confirm the fix: `/health` returns `"status":"ok"`, `/.well-known/replay-room` shows the commit you deployed, and **Open console** connects with the admin token. Then run **Actions → live deployment smoke → Run workflow** on GitHub.
+
+If the API instead deploys from `main`, that works with the `0.3.0` console, because `main`'s API keeps the older endpoints. It will report version `0.3.0` with a newer commit until `v0.4.0` is cut.
 
 ## Files
 
 | File | Contents | Status |
 |---|---|---|
-| [messaging.md](messaging.md) | Pitch, 25/50/100-word descriptions, technical and nontechnical versions, differentiators, headlines, subtitles, language to avoid | Ready |
-| [x.md](x.md) | Three single-post options under 280 characters, plus an optional proof reply | Ready after placeholder check |
-| [linkedin.md](linkedin.md) | Two variants | Ready after resolving `[[NPM_LINE]]` |
-| [show-hn.md](show-hn.md) | Title, URL, first comment with limitations and questions | Ready after resolving `[[NPM_LINE]]` |
-| [reddit.md](reddit.md) | r/SideProject and r/devops posts, with an r/node fallback | Ready; check subreddit rules on the day |
-| [product-hunt.md](product-hunt.md) | Listing fields, maker comment, features, reply templates | Ready; gallery needs captured media |
-| [substack.md](substack.md) | About 1,180-word essay | Ready after resolving `[[NPM_LINE]]` and the image marker |
-| [demo-script.md](demo-script.md) | 60-second, 3-minute, and 8-minute scripts with the cold-start fallback | Ready to record after deploy |
-| [faq.md](faq.md) | 23 questions with source links | Ready |
-| [media-plan.md](media-plan.md) | Shot list, hero GIF, alt text, banner and Open Graph specs | Ready; screenshots must be captured |
-| [release-checklist.md](release-checklist.md) | The release train, steps 0–15 | Ready to execute |
-| [link-map.md](link-map.md) | Canonical URLs, placeholders, UTM variants | Ready |
-| [press-kit.md](press-kit.md) | Summary, build story, facts, proof points, boilerplate, assets | Ready after resolving `[[CONTACT]]` |
-| [assets/](assets/README.md) | Rendered banner and Open Graph image, with editable sources | Ready |
-| [check-launch-kit.mjs](check-launch-kit.mjs) | Consistency checks for this folder; `--final` also fails on unresolved placeholders in post copy | Passes today without `--final` |
+| [messaging.md](messaging.md) | Pitch, 25/50/100-word descriptions, technical and nontechnical versions, differentiators, headlines, subtitles, language to avoid | Final |
+| [x.md](x.md) | Three single-post options under 280 characters, plus an optional proof reply | Final |
+| [linkedin.md](linkedin.md) | Two variants | Final |
+| [show-hn.md](show-hn.md) | Title, URL, first comment with limitations and questions | Final; post on a weekday morning |
+| [reddit.md](reddit.md) | r/SideProject and r/devops posts, with an r/node fallback | Final; check subreddit rules on the day |
+| [product-hunt.md](product-hunt.md) | Listing fields, maker comment, features, reply templates | Final; the gallery can use the new screenshots |
+| [substack.md](substack.md) | About 1,180-word essay with the architecture diagram | Final |
+| [demo-script.md](demo-script.md) | 60-second, 3-minute, and 8-minute scripts for live recordings, with the cold-start fallback | Ready for a live recording after B1 |
+| [faq.md](faq.md) | 23 questions with source links | Final |
+| [media-plan.md](media-plan.md) | Shot list, video, hero GIF, alt text, banner and Open Graph specs | Updated with the recorded media |
+| [release-checklist.md](release-checklist.md) | The release train to `v0.4.0`, steps 0–15 | Ready to execute after the launch |
+| [link-map.md](link-map.md) | Canonical URLs, placeholders, UTM variants | Final |
+| [press-kit.md](press-kit.md) | Summary, build story, facts, proof points, boilerplate, assets | Final |
+| [assets/](assets/README.md) | Demo video, hero GIF and MP4, cover, screenshots, banner, and Open Graph image | Ready |
+| [video/](video/README.md) | The scripts that staged and recorded the demo, to re-record after a release | Ready |
+| [check-launch-kit.mjs](check-launch-kit.mjs) | Consistency checks for this folder; `--final` also fails on unresolved placeholders in post copy | Passes, including `--final` |
 
 ## Canonical links
 
@@ -76,7 +82,7 @@ Not a blocker, but worth knowing: the static console exposes no commit marker, s
 | OpenAPI | <https://replay-room-api.onrender.com/openapi.json> |
 | Launch proof | <https://replay-room-api.onrender.com/.well-known/replay-room> |
 | Latest release | <https://github.com/abhid1234/replay-room/releases/latest> |
-| npm | `[[NPM_URL]]`, not published |
+| npm | `[[NPM_URL]]`, not published and not used in the posts |
 
 UTM variants and placeholder rules are in [link-map.md](link-map.md).
 
@@ -90,23 +96,20 @@ Re-run each check on the day you post. If a number moved, update every file that
 | 9 deployment-smoke tests | messaging, Show HN, press kit | `npm run test:smoke` |
 | 21 conformance checks (6/6/9 across 15 fixtures) | messaging, LinkedIn, Show HN, press kit, release checklist | `npm run conformance` |
 | Nine replay conditions | all copy | Count the checks in `src/domain/replay-guard.ts` |
-| 30-minute approval window | messaging, FAQ, Show HN, Reddit, essay, press kit, Product Hunt, demo script | `REPLAY_APPROVAL_TTL_MS` in `src/api/app.ts` |
+| 30-minute approval window | messaging, FAQ, Show HN, Reddit, essay, press kit, Product Hunt, demo script, video | `REPLAY_APPROVAL_TTL_MS` in `src/api/app.ts` |
 | Postgres 17 and Redis 8 in CI | messaging, Show HN, press kit | The service images in `.github/workflows/ci.yml` |
-| Default retry budget of 5 | press kit (the demo script sets 3 on purpose) | The `maxAttempts` default in `src/api/app.ts` |
+| Default retry budget of 5 | press kit (the demo script and the video use 3 on purpose) | The `maxAttempts` default in `src/api/app.ts` |
 | `Retry-After` clamp of 15 minutes | Show HN, press kit | `MAX_RETRY_AFTER_MS` in `src/domain/retry.ts` |
 | Live version and commit | demo script, press kit | `curl -s https://replay-room-api.onrender.com/.well-known/replay-room` |
-| npm availability | every `[[NPM_LINE]]` | `npm view @avee1234/replay-room version` |
+| npm availability | none while it returns `E404` | `npm view @avee1234/replay-room version` |
 | Dataset version and case counts | press kit, FAQ, this README | `curl -sL https://huggingface.co/datasets/abhid1234/replay-room-fixtures/resolve/main/dataset-manifest.json` |
 | Cold-start duration | demo script, press kit | `coldStart.warmAfterMs` in the latest `live deployment smoke` log |
 
 ## Recommended publishing order
 
-1. **Release train** ([release-checklist.md](release-checklist.md)), starting with the database expiry check, which is due by 2026-10-28.
-2. **Media capture** from the deployed release ([media-plan.md](media-plan.md)) and the demo recording ([demo-script.md](demo-script.md)).
-3. **Final copy substitution**, then `node launch/check-launch-kit.mjs --final` must pass.
-4. **Launch day, morning US Pacific:** publish the Substack essay first, so replies and follow-up posts can link to it. Then post on LinkedIn, then X (one option, plus the optional proof reply).
-5. **Same day, 8–10 a.m. Pacific:** Show HN. Stay in the thread for three hours.
-6. **Day 2:** r/SideProject. **Day 3:** r/devops, or r/node if r/devops rules forbid it.
-7. **About a week later:** Product Hunt on its own day, with the captured gallery, plus the second LinkedIn variant and a second X option.
-
-Suggested dates, if the release train finishes by Friday 2026-10-30: launch on **Tuesday 2026-11-03**, with Reddit on 2026-11-04 and 2026-11-05 and Product Hunt on Tuesday 2026-11-10. If any blocker is still open on Friday, move everything back a week rather than posting with a gap.
+1. **Restore the API** ([steps above](#restore-the-api)) and confirm `/health` returns `ok`. Do not post before this.
+2. **Tonight, Sunday 2026-11-01 (Pacific):** publish the Substack essay first, so replies can link to it. Then LinkedIn variant 1 with the demo video, then X option A with the hero MP4 or the full video, plus the proof reply.
+3. **Monday 2026-11-02, 8–10 a.m. Pacific:** Show HN. A Sunday-night submission reaches far fewer readers. Stay in the thread for three hours.
+4. **Tuesday 2026-11-03:** r/SideProject. **Wednesday 2026-11-04:** r/devops, or r/node if the r/devops rules forbid it.
+5. **Tuesday 2026-11-10:** Product Hunt on its own day, plus LinkedIn variant 2 and a second X option.
+6. **After the launch:** the release train to `v0.4.0` ([release-checklist.md](release-checklist.md)), then the live-only screenshots.
