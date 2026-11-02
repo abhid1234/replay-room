@@ -3,27 +3,29 @@
 [![verify](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml/badge.svg)](https://github.com/abhid1234/replay-room/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/abhid1234/replay-room?display_name=tag)](https://github.com/abhid1234/replay-room/releases/latest)
 
-[Live console](https://replay-room-web.onrender.com) · [Interactive drill](https://huggingface.co/spaces/abhid1234/replay-room) · [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
+[Outage drill](https://replay-room-web.onrender.com) · [Drill on Hugging Face](https://huggingface.co/spaces/abhid1234/replay-room) · [Architecture](docs/ARCHITECTURE.md) · [Fixtures dataset](https://huggingface.co/datasets/abhid1234/replay-room-fixtures) · [Latest release](https://github.com/abhid1234/replay-room/releases/latest)
+
+Evaluation deployment on Render's free plans, which sleep when idle: [API health](https://replay-room-api.onrender.com/health) · [OpenAPI](https://replay-room-api.onrender.com/openapi.json) · [Launch proof](https://replay-room-api.onrender.com/.well-known/replay-room)
 
 **Rehearse a failed webhook before you replay it.**
 
-Replay Room is an operator console for the dangerous moment after an event lands in a dead-letter queue. It preserves the original payload, records every delivery attempt, requires a successful rehearsal against the exact destination and payload hash, and only then allows an audited replay.
+Replay Room turns a failed webhook from a blind resend into a rehearsed, evidence-backed production change. It's a webhook relay with an operator console for the dangerous moment after an event lands in dead letter: providers post webhooks to it and it delivers them to your service. When delivery fails, it preserves the original payload, records every attempt, rates the duplicate-side-effect risk with fixed rules, requires a passing rehearsal against the exact destination and payload hash, and only then allows an audited replay, with a second operator for high-risk replays.
 
-This is a portfolio project built to exercise Render as a platform, not merely run one process on it.
+It's early and open source, with no production users yet. It was also built to exercise Render as a platform, not merely run one process on it.
 
 ## Why this project
 
-Recent developer discussions keep converging on the same operational gap: receiving a webhook is easy; proving that a failed event is safe to replay is not. Basic inspectors can capture and resend. Replay Room adds the part an incident operator needs:
+Recent developer discussions keep converging on the same operational gap: receiving a webhook is easy; deciding whether a failed event can be sent again without a duplicate side effect is not. Replay Room focuses on that decision:
 
 - immutable receipt of the original event;
 - generic HMAC, GitHub, and timestamp-bound Stripe signature verification;
 - idempotency-aware ingestion;
 - async delivery with exponential backoff and jitter;
 - a dead-letter state with complete attempt history;
-- rehearsal against a controlled endpoint;
+- rehearsal against the exact destination the replay will use, with an explicit risk acknowledgement for high-risk events;
 - a replay guard that binds approval to the rehearsed payload hash and destination;
 - 30-minute, two-person approval for high-risk replays, bound to the exact rehearsal, payload, and destination;
-- operator reason and append-only audit history;
+- operator reason and an append-only audit history, kept for the retention window;
 - a Postgres delivery-intent outbox that survives queue loss, suppresses duplicate replay approvals, and lets reconciliation reconstruct exact jobs.
 
 The research and product decisions are captured in [docs/RESEARCH.md](docs/RESEARCH.md). Provider setup and forwarding contracts are in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
@@ -44,7 +46,7 @@ The operator token is session-scoped by default and is removed by **Disconnect**
 
 Every configured endpoint appears in the **Ingest workbench** with a copy-ready, idempotent cURL recipe. Unsigned endpoints produce an executable request; signed profiles name the exact provider header that must be computed without ever returning the signing secret to the browser.
 
-Every incident can be downloaded as a signed evidence bundle. The JSON includes the original event identity and payload digest, diagnosis, full attempt transcript, rehearsal records, and audit history. A canonical HMAC-SHA256 seal detects any later modification. Endpoint signing secrets are never returned by the admin API or included in exports; the server reports only whether a secret is configured.
+Every incident can be downloaded as a signed evidence bundle. The JSON includes the original event identity, the full payload and its digest, diagnosis, full attempt transcript, rehearsal records, and audit history. A canonical HMAC-SHA256 seal detects any later modification. Endpoint signing secrets are never returned by the admin API or included in exports; the server reports only whether a secret is configured.
 
 Operators with access to the deployment's evidence key can verify an exported bundle offline:
 
@@ -102,7 +104,7 @@ Every approval and rejection records the risk level and acknowledgement in the a
 
 Before approval, the console runs a side-effect-free replay preflight and renders all nine guard conditions as pass, fail, or pending: operator reason, identity, rehearsal existence and outcome, payload binding, destination binding, dead-letter state, duplicate-risk acknowledgement, and two-person control. Changing any input or operator identity invalidates the visible decision and disables approval until the guard is checked again. The replay endpoint independently reevaluates the same guard, so the UI is guidance rather than authority. The newest rehearsal is authoritative—even an older passing rehearsal cannot bypass a newer failure.
 
-When receiver acceptance is ambiguous or idempotency evidence is missing, acknowledgement alone is not enough. One operator records an approval that expires after 30 minutes and is cryptographically scoped by the durable ledger to the current rehearsal, payload digest, and destination. A different named operator must then rerun preflight and execute the replay. Payload drift, destination drift, a newer rehearsal, expiration, or self-approval closes the gate automatically.
+When receiver acceptance is ambiguous or idempotency evidence is missing, acknowledgement alone is not enough. One operator records an approval that expires after 30 minutes and is scoped by the durable ledger to the current rehearsal, payload digest, and destination. A different named operator must then rerun preflight and execute the replay. Payload drift, destination drift, a newer rehearsal, expiration, or self-approval closes the gate automatically.
 
 ## Quick start
 
@@ -211,7 +213,7 @@ The current public deployment passed this gate on 2026-10-18 against `https://re
 
 GitHub Actions runs the repository verification gate on every branch push and pull request, exercises the persistence layer against Postgres 17 and Redis 8 service containers, audits production dependencies at high severity, builds the release Docker image, and runs CodeQL. A separate daily and manually dispatchable live-smoke workflow checks Render and Hugging Face for post-deploy drift. The release workflow prepares an attested npm tarball and CycloneDX SBOM; npm publication and GitHub release creation are independent explicit inputs. Each [GitHub release](https://github.com/abhid1234/replay-room/releases) identifies its exact source commit, and both attestations are independently verifiable against the published tarball digest.
 
-## Interview walkthrough
+## Guided walkthrough
 
 1. Run the public outage drill and narrate how each checkpoint maps to Render.
 2. Send a webhook to the `retry` demo sink and show the immediate `202` response.
