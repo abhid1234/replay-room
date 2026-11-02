@@ -41,6 +41,7 @@ const endpointSchema = z.object({
 const rehearsalSchema = z.object({
   destinationUrl: z.string().url(),
   notes: z.string().max(500).default(""),
+  acknowledgeRisk: z.boolean().default(false),
 });
 
 const replaySchema = z.object({
@@ -230,6 +231,21 @@ export async function buildApp({ config, store, queue }: Dependencies): Promise<
     assertSafeDestination(input.destinationUrl, config.ALLOW_PRIVATE_TARGETS);
     const event = await store.getEvent(id);
     if (!event) return reply.code(404).send({ error: "Event not found" });
+    // The replay may only go to the rehearsed URL, so a rehearsal reaches the same receiver.
+    // For a high-risk event that is itself a possible duplicate side effect: require the same
+    // explicit acknowledgement the replay needs before anything is sent.
+    const risk = assessReplayRisk(event);
+    if (risk.requiresAcknowledgement && !input.acknowledgeRisk) {
+      const blockedReason = "Explicitly acknowledge the duplicate-side-effect risk before rehearsing; a rehearsal reaches the replay destination";
+      await store.addAudit({
+        eventId: id,
+        action: "rehearsal.blocked",
+        actor: actorFrom(request.headers) || "operator",
+        reason: blockedReason,
+        metadata: { destinationUrl: input.destinationUrl, riskLevel: risk.level, riskAcknowledged: false },
+      });
+      return reply.code(409).send({ error: "Rehearsal blocked", reasons: [blockedReason] });
+    }
     const job = {
       eventId: id,
       mode: "rehearsal",

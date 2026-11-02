@@ -576,4 +576,35 @@ describe("delivery processor", () => {
     expect(queue.jobs.at(-1)?.jobId).toContain("attempt-2");
     expect([...store.intents.values()].map((intent) => intent.state).sort()).toEqual(["completed", "dispatched"]);
   });
+
+  it("returns a replay with no HTTP response to dead letter instead of retrying it", async () => {
+    const { store, queue, eventId } = await setup("dead_letter");
+    const job = { eventId, mode: "replay", cycleId: "replay-rehearsal-1", attemptNumber: 1 } as const;
+    await scheduleDelivery({ store, queue, job, jobKey: deliveryJobKey(job) });
+    const postFn = vi.fn(async (): Promise<never> => { throw new Error("socket hang up after request write"); });
+
+    const result = await deliver(queue.jobs[0]!.job, { store, queue, allowPrivateTargets: false, postFn, lookupFn: publicLookup });
+
+    expect(result).toMatchObject({ terminal: true, nextStatus: "dead_letter" });
+    expect(postFn).toHaveBeenCalledTimes(1);
+    expect(queue.jobs).toHaveLength(1);
+    const detail = await store.getEvent(eventId);
+    expect(detail?.status).toBe("dead_letter");
+    expect(detail?.lastError).toContain("replay not retried because the receiver may have acted");
+    expect(store.audit.at(-1)).toMatchObject({ action: "delivery.dead_lettered", metadata: { statusCode: null } });
+  });
+
+  it("still retries a live delivery that got no HTTP response", async () => {
+    const { store, queue, eventId } = await setup();
+    const result = await deliver({ eventId, mode: "live" }, {
+      store,
+      queue,
+      allowPrivateTargets: false,
+      postFn: async () => { throw new Error("connect ETIMEDOUT"); },
+      lookupFn: publicLookup,
+    });
+
+    expect(result).toMatchObject({ terminal: false, nextStatus: "retrying" });
+    expect(queue.jobs).toHaveLength(1);
+  });
 });

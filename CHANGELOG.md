@@ -6,6 +6,8 @@ All notable changes to Replay Room are documented here.
 
 ### Changed
 
+- a high-risk event can only be rehearsed with an explicit risk acknowledgement, because a rehearsal reaches the replay destination; the console's **Run rehearsal** button now waits for the risk checkbox;
+- a replay that gets no HTTP response returns to dead letter instead of retrying, so a possible duplicate side effect is never repeated without an operator;
 - collapsed the operator console's five-request polling cycle into one versioned dashboard snapshot while retaining concurrent Postgres and Key Value reads;
 - ran queue health and database/outbox health concurrently for lower system-snapshot latency;
 - made console polling completion-paced, visibility-aware, and exponentially backed off after transient failures;

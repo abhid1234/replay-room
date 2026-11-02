@@ -247,10 +247,10 @@ function ConsoleApp() {
     }
   };
 
-  const rehearse = async (event: Detail, destinationUrl: string, operator: string) => {
+  const rehearse = async (event: Detail, destinationUrl: string, operator: string, acknowledgeRisk: boolean) => {
     try {
       await request(`/api/events/${event.id}/rehearse`, {
-        method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, notes: "Dashboard rehearsal before operator replay" }),
+        method: "POST", headers: { "x-operator": operator }, body: JSON.stringify({ destinationUrl, notes: "Dashboard rehearsal before operator replay", acknowledgeRisk }),
       });
       setMessage("Rehearsal queued. Refresh in a moment to inspect the result.");
     } catch (error) {
@@ -524,7 +524,7 @@ function ageLabel(seconds: number | null | undefined): string {
 
 function EventInspector({ event, onRehearse, onRecordApproval, onPreflight, onReplay, onDownload }: {
   event: Detail;
-  onRehearse: (event: Detail, target: string, operator: string) => Promise<void>;
+  onRehearse: (event: Detail, target: string, operator: string, acknowledgeRisk: boolean) => Promise<void>;
   onRecordApproval: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean, operator: string) => Promise<void>;
   onPreflight: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean, operator: string) => Promise<ReplayPreflight | null>;
   onReplay: (event: Detail, target: string, reason: string, acknowledgeRisk: boolean, operator: string) => Promise<void>;
@@ -595,7 +595,7 @@ function EventInspector({ event, onRehearse, onRecordApproval, onPreflight, onRe
       <label htmlFor={`replay-target-${event.id}`}>Rehearsal / replay target</label><input id={`replay-target-${event.id}`} value={target} onChange={(e) => { setTarget(e.target.value); invalidate(); }} />
       <label htmlFor={`replay-reason-${event.id}`}>Operator reason</label><textarea id={`replay-reason-${event.id}`} value={reason} onChange={(e) => { setReason(e.target.value); invalidate(); }} />
       <div className="actions">
-        <button disabled={!operator.trim()} onClick={() => { invalidate(); void onRehearse(event, target, operator); }}>Run rehearsal</button>
+        <button disabled={!operator.trim() || (event.replayRisk.requiresAcknowledgement && !riskAccepted)} title={event.replayRisk.requiresAcknowledgement && !riskAccepted ? "A rehearsal reaches the replay destination; accept the risk first" : undefined} onClick={() => { invalidate(); void onRehearse(event, target, operator, riskAccepted); }}>Run rehearsal</button>
         {event.replayRisk.requiresAcknowledgement && <button className="approval-button" disabled={!operator.trim() || !riskAccepted} onClick={() => void recordApproval()}>Record approval</button>}
         <button className="preflight-button" disabled={checking || !operator.trim()} onClick={() => void runPreflight()}>{checking ? "Checking guard..." : "Check replay"}</button>
         <button className="danger-button" disabled={!preflight?.allowed} onClick={() => void approveReplay()}>Approve replay</button>

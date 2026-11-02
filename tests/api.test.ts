@@ -487,6 +487,50 @@ describe("webhook API", () => {
     expect(detail.json().replayRisk).toMatchObject({ level: "high", requiresAcknowledgement: true });
   });
 
+  it("requires risk acknowledgement before rehearsing a high-risk event, because a rehearsal reaches the replay destination", async () => {
+    const store = new FakeStore();
+    const queue = new FakeQueue();
+    const unkeyed = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: null,
+      headers: {},
+      payload: { type: "charge.captured", chargeId: "ch_unkeyed" },
+      payloadSha256: "f".repeat(64),
+    });
+    await store.updateEvent(unkeyed.event.id, { status: "dead_letter", attemptCount: 3 });
+    const keyed = await store.createEvent({
+      endpointId: store.endpoint.id,
+      idempotencyKey: "charge-keyed",
+      headers: {},
+      payload: { type: "charge.captured", chargeId: "ch_keyed" },
+      payloadSha256: "a".repeat(64),
+    });
+    await store.updateEvent(keyed.event.id, { status: "dead_letter" });
+    const app = await buildApp({ config, store, queue });
+    apps.push(app);
+    const rehearse = (eventId: string, payload: Record<string, unknown>) => app.inject({
+      method: "POST",
+      url: `/api/events/${eventId}/rehearse`,
+      headers: { authorization: `Bearer ${config.ADMIN_TOKEN}`, "content-type": "application/json", "x-operator": "safety-reviewer" },
+      payload: { destinationUrl: "https://example.com/hook", ...payload },
+    });
+
+    const blocked = await rehearse(unkeyed.event.id, {});
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().reasons[0]).toContain("acknowledge the duplicate-side-effect risk before rehearsing");
+    expect(queue.jobs).toHaveLength(0);
+    expect(store.audit.at(-1)).toMatchObject({ action: "rehearsal.blocked", actor: "safety-reviewer", metadata: { riskLevel: "high", riskAcknowledged: false } });
+
+    const acknowledged = await rehearse(unkeyed.event.id, { acknowledgeRisk: true });
+    expect(acknowledged.statusCode).toBe(202);
+    expect(queue.jobs).toHaveLength(1);
+    expect(queue.jobs[0]!.job).toMatchObject({ mode: "rehearsal", destinationUrl: "https://example.com/hook" });
+
+    const lowRisk = await rehearse(keyed.event.id, {});
+    expect(lowRisk.statusCode).toBe(202);
+    expect(queue.jobs).toHaveLength(2);
+  });
+
   it("reports the live service fabric without exposing it publicly", async () => {
     const queue = new FakeQueue();
     const store = new FakeStore();

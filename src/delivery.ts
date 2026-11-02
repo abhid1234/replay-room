@@ -187,9 +187,15 @@ async function deliverClaimed(
     return { delivered: outcome.nextStatus === "delivered", terminal: true, nextStatus: outcome.nextStatus, retryDelayMs: null };
   }
 
-  const retryable = !unsafeDestination && (statusCode === null || isRetryableStatus(statusCode));
+  // A replay that got no HTTP response may already have reached the receiver. Retrying it would
+  // repeat a possible side effect that no operator approved, so it returns to dead letter, where
+  // the new no-response attempt rates the next replay high risk.
+  const ambiguousReplay = job.mode === "replay" && statusCode === null;
+  const retryable = !unsafeDestination && !ambiguousReplay && (statusCode === null || isRetryableStatus(statusCode));
   const terminal = !retryable || deliveryAttempt >= detail.endpoint.maxAttempts;
-  const lastError = errorMessage ?? `Destination returned HTTP ${statusCode}`;
+  const lastError = ambiguousReplay
+    ? `${errorMessage ?? "No HTTP response"}; replay not retried because the receiver may have acted`
+    : errorMessage ?? `Destination returned HTTP ${statusCode}`;
   if (terminal) {
     const outcome = await deps.store.commitDeliveryOutcome({
       eventId: detail.id,
