@@ -4,6 +4,8 @@ All notable changes to Replay Room are documented here.
 
 ## Unreleased
 
+## 0.3.1 - 2026-11-02
+
 ### Changed
 
 - a high-risk event can only be rehearsed with an explicit risk acknowledgement, because a rehearsal reaches the replay destination; the console's **Run rehearsal** button now waits for the risk checkbox;
