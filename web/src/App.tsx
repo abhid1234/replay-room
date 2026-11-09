@@ -102,6 +102,7 @@ const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 const LIVE_CONSOLE_URL = "https://replay-room-web.onrender.com";
 const API_CONTRACT_URL = "https://replay-room-api.onrender.com/openapi.json";
 const SOURCE_URL = "https://github.com/abhid1234/replay-room";
+const ESSAY_URL = "https://abhid.substack.com/p/your-webhook-failed-is-it-safe-to?utm_source=console&utm_medium=web&utm_campaign=replay-room-launch";
 const FIXTURES_URL = "https://huggingface.co/datasets/abhid1234/replay-room-fixtures";
 
 class ApiRequestError extends Error {
@@ -126,6 +127,7 @@ function DemoApp() {
         <p className="kicker">Webhook incidents, reconstructed</p>
         <h1>Every event leaves a flight recorder.</h1>
         <p className="lede">Replay Room explains how delivery failed, rehearses the exact recovery, and seals the evidence before anyone can replay production traffic.</p>
+        <a className="essay-link" href={ESSAY_URL} target="_blank" rel="noreferrer">Read the story: Your webhook failed. Is it safe to send it again? →</a>
       </div>
       <div className="connection-panel demo-panel">
         <div className="connection-title"><span>Public simulation</span><i className="online" /></div>
@@ -326,6 +328,7 @@ function ConsoleApp() {
           <p className="kicker">Webhook incidents, reconstructed</p>
           <h1>Every event leaves a flight recorder.</h1>
           <p className="lede">Replay Room explains how delivery failed, rehearses the exact recovery, and seals the evidence before anyone can replay production traffic.</p>
+        <a className="essay-link" href={ESSAY_URL} target="_blank" rel="noreferrer">Read the story: Your webhook failed. Is it safe to send it again? →</a>
         </div>
         <div className="connection-panel">
           <div className="connection-title"><span>Live stack</span><i className={system ? "online" : ""} /></div>
