@@ -45,6 +45,8 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 24px 40px 56px; }
 .kicker { color: var(--mint); margin: 0; }
 h1 { margin: 14px 0 20px; font: 700 clamp(64px, 8.5vw, 132px)/.82 "Barlow Condensed", sans-serif; letter-spacing: -.045em; max-width: 940px; text-wrap: balance; }
 .lede { max-width: 700px; color: #b9c8c8; font-size: 18px; line-height: 1.65; }
+.essay-link { display: inline-block; margin-top: 4px; color: var(--mint); font: 500 14px "IBM Plex Mono", monospace; text-decoration: none; border-bottom: 1px solid rgba(159, 247, 215, .45); }
+.essay-link:hover, .essay-link:focus-visible { border-bottom-color: var(--mint); }
 .connection-panel { border: 1px solid var(--line); background: rgba(7, 26, 34, .86); padding: 22px; box-shadow: 9px 9px 0 rgba(0, 0, 0, .35); }
 .connection-title { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); margin: -4px 0 20px; padding-bottom: 13px; font: 500 12px "IBM Plex Mono", monospace; }
 .connection-title i { width: 9px; height: 9px; background: var(--amber); border-radius: 50%; box-shadow: 0 0 0 5px rgba(255, 180, 84, .1); }

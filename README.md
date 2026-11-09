@@ -9,6 +9,10 @@ Evaluation deployment on Render's free plans, which sleep when idle: [API health
 
 **Rehearse a failed webhook before you replay it.**
 
+[![Watch the 91-second video: Your webhook failed. Is it safe to send it again?](docs/media/replay-room-video.png)](https://abhid.substack.com/p/your-webhook-failed-is-it-safe-to?utm_source=github&utm_medium=readme&utm_campaign=replay-room-launch&utm_content=video)
+
+**The story:** [Your webhook failed. Is it safe to send it again?](https://abhid.substack.com/p/your-webhook-failed-is-it-safe-to?utm_source=github&utm_medium=readme&utm_campaign=replay-room-launch&utm_content=essay), the launch essay, with the 91-second video and the guard's output from a local run.
+
 Replay Room turns a failed webhook from a blind resend into a rehearsed, evidence-backed production change. It's a webhook relay with an operator console for the dangerous moment after an event lands in dead letter: providers post webhooks to it and it delivers them to your service. When delivery fails, it preserves the original payload, records every attempt, rates the duplicate-side-effect risk with fixed rules, requires a passing rehearsal against the exact destination and payload hash, and only then allows an audited replay, with a second operator for high-risk replays.
 
 It's early and open source, with no production users yet. It was also built to exercise Render as a platform, not merely run one process on it.
