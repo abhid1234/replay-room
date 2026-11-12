@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IncidentDrill } from "./IncidentDrill";
+import { ApiRequestError, isApiOutage, readApiResponse, unreachableError } from "./api-response";
 import { buildIngestRecipe } from "./ingest-recipe";
 import { startAuthorizedPolling, type PollResult } from "./polling";
 import { OperatorRequestSession, RequestSessionCancelledError } from "./request-session";
@@ -105,12 +106,6 @@ const SOURCE_URL = "https://github.com/abhid1234/replay-room";
 const ESSAY_URL = "https://abhid.substack.com/p/your-webhook-failed-is-it-safe-to?utm_source=console&utm_medium=web&utm_campaign=replay-room-launch";
 const FIXTURES_URL = "https://huggingface.co/datasets/abhid1234/replay-room-fixtures";
 
-class ApiRequestError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}
-
 export function App() {
   return DEMO_MODE ? <DemoApp /> : <ConsoleApp />;
 }
@@ -155,19 +150,24 @@ function ConsoleApp() {
   const [selected, setSelected] = useState<Detail | null>(null);
   const [message, setMessage] = useState("Enter the Render-generated admin token to open the console.");
   const [busy, setBusy] = useState(false);
+  const [apiOutage, setApiOutage] = useState(false);
   const [requestSession] = useState(() => new OperatorRequestSession());
 
   const auth = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     return requestSession.run(async (signal) => {
-      const response = await fetch(`${API_BASE}${path}`, {
-        ...init,
-        signal,
-        headers: { "content-type": "application/json", ...auth, ...(init.headers || {}) },
-      });
-      const body = await response.json();
-      if (!response.ok) throw new ApiRequestError(body.error || `HTTP ${response.status}`, response.status);
-      return body as T;
+      let response: Response;
+      try {
+        response = await fetch(`${API_BASE}${path}`, {
+          ...init,
+          signal,
+          headers: { "content-type": "application/json", ...auth, ...(init.headers || {}) },
+        });
+      } catch (error) {
+        if (signal.aborted) throw error;
+        throw unreachableError(API_BASE);
+      }
+      return readApiResponse<T>(response.status, response.ok, await response.text(), API_BASE);
     });
   }, [auth, requestSession]);
 
@@ -184,10 +184,12 @@ function ConsoleApp() {
       setStats(snapshot.stats); setEvents(snapshot.events); setEndpoints(snapshot.endpoints); setReliability(snapshot.reliability); setSystem(snapshot.system);
       saveOperatorCredential(token, rememberToken, localStorage, sessionStorage);
       setMessage(`Connected to ${API_BASE}`);
+      setApiOutage(false);
       return "ok";
     } catch (error) {
       if (error instanceof RequestSessionCancelledError) return "cancelled";
       reportRequestError(error, "Could not load Replay Room");
+      setApiOutage(isApiOutage(error));
       return error instanceof ApiRequestError && error.status === 401 ? "unauthorized" : "retryable";
     } finally { if (!silent) setBusy(false); }
   }, [rememberToken, reportRequestError, request, token]);
@@ -216,6 +218,7 @@ function ConsoleApp() {
     setEndpoints([]);
     setReliability([]);
     setSystem(null);
+    setApiOutage(false);
     setSelected(null);
     setMessage("Disconnected. The operator token was removed from this browser.");
   };
@@ -361,7 +364,9 @@ function ConsoleApp() {
         <article className="panel event-panel">
           <div className="panel-title"><span>Event stream</span><button className="quiet" onClick={() => void refresh()}>Refresh</button></div>
           <div className="event-list">
-            {events.length === 0 && <div className="empty">No events yet. Create an endpoint and send it JSON.</div>}
+            {events.length === 0 && (apiOutage
+              ? <div className="empty outage" role="status">Can't reach the API at {API_BASE}, so events can't load. The deployment may be asleep, or its database may be offline. Events will load here once it's back.</div>
+              : <div className="empty">No events yet. Create an endpoint and send it JSON.</div>)}
             {events.map((event) => (
               <button className={`event-row ${selected?.id === event.id ? "selected" : ""}`} key={event.id} onClick={() => void openEvent(event.id)}>
                 <span className={`status ${event.status}`}>{event.status.replace("_", " ")}</span>
